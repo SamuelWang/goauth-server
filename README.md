@@ -8,3 +8,4 @@ A Golang API service of the auth platform.
 - Gin Web Framework
 - PostgreSQL
 - sqlc + pgx
+- golang-migrate
