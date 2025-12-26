@@ -28,6 +28,8 @@ mkdir -p "$TARGET_DIR"
 
 echo "Dumping schema to $TARGET_FILE"
 
+# https://github.com/sqlc-dev/sqlc/issues/4065
+# Remove RESTRICT/UNRESTRICT commands to avoid issues with sqlc
 pg_dump --schema-only --no-owner --no-privileges "$DB_CONN" | sed '/^\\restrict /d;/^\\unrestrict /d' > "$TARGET_FILE"
 
 echo "Schema dumped to $TARGET_FILE"
