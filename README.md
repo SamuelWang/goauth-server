@@ -1,6 +1,6 @@
-# goauth-api
+# goauth-server
 
-A Golang API service of the auth platform.
+A Golang service of the auth platform.
 
 ## Technologies Used
 
@@ -15,8 +15,8 @@ A Golang API service of the auth platform.
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/SamuelWang/goauth-api.git
-   cd goauth-api
+   git clone https://github.com/SamuelWang/goauth-server.git
+   cd goauth-server
    ```
 
 2. **Install Dependencies**

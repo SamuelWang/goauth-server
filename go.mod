@@ -1,4 +1,4 @@
-module github.com/SamuelWang/goauth-api
+module github.com/SamuelWang/goauth-server
 
 go 1.25.5
 
