@@ -7,7 +7,6 @@ DROP FUNCTION IF EXISTS internal_set_updated_at();
 
 -- Drop indexes (optional; dropping the table will remove them as well)
 DROP INDEX IF EXISTS users_provider_provider_id_key;
-DROP INDEX IF EXISTS users_email_key;
 
 -- Drop the table
 DROP TABLE IF EXISTS users;

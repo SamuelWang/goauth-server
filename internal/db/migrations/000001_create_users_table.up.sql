@@ -20,8 +20,6 @@ CREATE TABLE IF NOT EXISTS
   );
 
 -- Unique constraints / indexes
-CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (LOWER(email));
-
 CREATE UNIQUE INDEX IF NOT EXISTS users_provider_provider_id_key ON users (provider, provider_id);
 
 -- Trigger function to set updated_at on updates
