@@ -2,14 +2,6 @@
 
 A Golang service of the auth platform.
 
-## Technologies Used
-
-- Golang
-- Gin Web Framework
-- PostgreSQL
-- sqlc + pgx
-- golang-migrate
-
 ## Setup Instructions
 
 1. **Clone the Repository**
@@ -88,9 +80,29 @@ Follow the instructions below to create and apply new migrations:
    sqlc generate
    ```
 
-## Recommended IDE Setup
+## Development
+
+### Technologies Used
+
+- Golang
+- Gin Web Framework
+- PostgreSQL
+- sqlc + pgx
+- golang-migrate
+
+### Recommended IDE Setup
 
 For development, it's recommended to use Visual Studio Code with the following extensions:
 
 - [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
 - [Prettier SQL VSCode](https://marketplace.visualstudio.com/items?itemName=inferrinizzard.prettier-sql-vscode)
+
+### File Structure
+
+- `cmd/api`: Main application entry point.
+- `internal/db`: Database-related code and queries.
+- `internal/model`: Data models and structures.
+- `internal/repo`: Repository layer for database interactions.
+- `internal/service`: Business logic and service layer.
+- `internal/server`: API server setup and route handlers.
+- `scripts/db`: Database migration and schema management scripts.
