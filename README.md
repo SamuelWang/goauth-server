@@ -80,6 +80,18 @@ Follow the instructions below to create and apply new migrations:
    sqlc generate
    ```
 
+### Rollback Migrations
+
+If you need to rollback migrations the repository provides a helper script. Usage:
+
+```bash
+chmod +x scripts/db/rollback_migrations.sh
+# rollback all migrations (default)
+./scripts/db/rollback_migrations.sh
+# rollback N down migrations (e.g. 2)
+./scripts/db/rollback_migrations.sh 2
+```
+
 ## Development
 
 ### Technologies Used
