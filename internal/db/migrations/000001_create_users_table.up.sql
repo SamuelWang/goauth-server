@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS
     first_name TEXT,
     last_name TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
+    is_admin BOOLEAN NOT NULL DEFAULT false,
     locale VARCHAR(10),
     provider TEXT,
     provider_id TEXT,
