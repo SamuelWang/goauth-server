@@ -34,6 +34,32 @@ if [ ! -d "$MIGRATIONS_DIR" ]; then
   exit 1
 fi
 
-migrate -path internal/db/migrations -database "$DB_CONN" up
+# Usage: run_migrations.sh [N]
+# If N is provided and is a positive integer, run only N up migrations.
+# If no argument is provided, run all pending migrations.
+if [ "$#" -gt 1 ]; then
+  echo "Usage: $0 [N]" >&2
+  exit 2
+fi
 
-echo "All migrations applied."
+if [ "$#" -eq 1 ]; then
+  # Validate numeric positive integer
+  case "$1" in
+    ''|*[!0-9]*)
+      echo "Invalid argument: must be a positive integer" >&2
+      exit 2
+      ;;
+    *)
+      STEPS="$1"
+      if [ "$STEPS" -eq 0 ]; then
+        echo "No migrations to apply (0 specified)."
+        exit 0
+      fi
+      migrate -path "$MIGRATIONS_DIR" -database "$DB_CONN" up "$STEPS"
+      ;;
+  esac
+else
+  migrate -path "$MIGRATIONS_DIR" -database "$DB_CONN" up
+fi
+
+echo "Migrations command completed."

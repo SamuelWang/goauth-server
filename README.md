@@ -33,7 +33,7 @@ A Golang service of the auth platform.
 
    ```bash
    chmod +x scripts/db/run_migrations.sh
-    ./scripts/db/run_migrations.sh
+   ./scripts/db/run_migrations.sh
    ```
 
 6. **Run the Application**
@@ -62,7 +62,7 @@ Follow the instructions below to create and apply new migrations:
 
    ```bash
    chmod +x scripts/db/run_migrations.sh
-   ./scripts/db/run_migrations.sh
+   ./scripts/db/run_migrations.sh [N]
    ```
 
 3. Dump the database schema:
