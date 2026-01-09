@@ -38,10 +38,10 @@ A Golang service of the auth platform.
 
 6. **Run the Application**
 
-   Start the API server:
+   Start the auth service:
 
    ```bash
-   go run ./cmd/api
+   go run ./cmd/auth-service
    ```
 
 ## Database Migrations
@@ -111,10 +111,6 @@ For development, it's recommended to use Visual Studio Code with the following e
 
 ### File Structure
 
-- `cmd/api`: Main application entry point.
+- `cmd/auth-service`: Main application entry point.
 - `internal/db`: Database-related code and queries.
-- `internal/model`: Data models and structures.
-- `internal/repo`: Repository layer for database interactions.
-- `internal/service`: Business logic and service layer.
-- `internal/server`: API server setup and route handlers.
 - `scripts/db`: Database migration and schema management scripts.
