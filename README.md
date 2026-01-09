@@ -55,7 +55,7 @@ Follow the instructions below to create and apply new migrations:
 1. Create a new migration:
 
    ```bash
-   migrate create -ext sql -dir ./scripts/db/migrations -seq <migration_name>
+   migrate create -ext sql -dir ./internal/db/migrations <migration_name>
    ```
 
 2. Apply migrations to the database:
