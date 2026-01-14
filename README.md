@@ -112,5 +112,13 @@ For development, it's recommended to use Visual Studio Code with the following e
 ### File Structure
 
 - `cmd/auth-service`: Main application entry point.
-- `internal/db`: Database-related code and queries.
-- `scripts/db`: Database migration and schema management scripts.
+- `internal/app/auth-service/`: Application setup and initialization.
+- `internal/db/`: Database-related code and queries.
+- `internal/db/migrations/`: Database migration files.
+- `internal/db/queries/`: SQL query files for sqlc.
+- `internal/db/schema/`: Database schema dumps.
+- `internal/handler/`: HTTP request handlers.
+- `internal/middleware/`: HTTP middleware components.
+- `internal/repository/`: Data access layer that the code is generated from sqlc queries.
+- `internal/service/`: Business logic layer.
+- `scripts/db/`: Database migration and schema management scripts.
