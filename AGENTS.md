@@ -45,13 +45,13 @@ Here are the common commands for this project.
 
 - **Run the Application:**
   ```bash
-  go run ./cmd/auth-service
+  go run ./cmd/auth-server
   ```
 
 ## File Structure
 
-- `cmd/auth-service`: Main application entry point.
-- `internal/app/auth-service/`: Application setup and initialization.
+- `cmd/auth-server`: Main application entry point.
+- `internal/app/auth-server/`: Application setup and initialization.
 - `internal/db/`: Database-related code and queries.
 - `internal/db/migrations/`: Database migration files.
 - `internal/db/queries/`: SQL query files for sqlc.

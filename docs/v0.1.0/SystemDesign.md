@@ -37,7 +37,7 @@ Based on the Software Requirements Specification (SRS) v0.1.0:
 The project follows a **Clean/Layered Architecture** to separate concerns and ensure maintainability.
 
 *   **Presentation Layer (CMD/API):** Handles HTTP requests, routing, and request validation. Implemented using **Gin Web Framework**.
-    *   Location: `cmd/auth-service/`, `internal/app/auth-service/` (planned)
+    *   Location: `cmd/auth-server/`, `internal/app/auth-server/` (planned)
 *   **Business Logic Layer (Service):** Contains the core business rules and use cases. It orchestrates data flow between the presentation and data access layers.
     *   Location: `internal/service/` (planned)
 *   **Data Access Layer (Repository):** interacting with the database.

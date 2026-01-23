@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS
     locale VARCHAR(10) NOT NULL DEFAULT 'en-US',
     provider TEXT,
     provider_id TEXT,
+    provider_data JSONB DEFAULT '{}'::jsonb,
     last_login_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
