@@ -84,7 +84,7 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (st
 				}
 				return userInfo.Locale
 			}(),
-			LastLoginAt:   time.Now(),
+			LastLoginAt: time.Now(),
 		})
 		if err != nil {
 			return "", fmt.Errorf("failed to create user: %w", err)
