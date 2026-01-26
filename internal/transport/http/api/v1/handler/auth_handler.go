@@ -28,13 +28,13 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 // GetCurrentUser returns the current authenticated user's information
 func (h *ApiV1Handler) GetCurrentUser(c *gin.Context) {
 	// Get user from context (set by auth middleware)
-	userID, exists := c.Get("user_id")
+	userID, exists := getUserID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	user, err := h.authService.GetUserByID(c.Request.Context(), userID.(string))
+	user, err := h.authService.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
 		log.Printf("Failed to get user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})

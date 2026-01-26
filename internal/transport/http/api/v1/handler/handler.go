@@ -24,3 +24,14 @@ func getCookieSecure(c *gin.Context) bool {
 	}
 	return false
 }
+
+// getUserID retrieves the user_id value from the Gin context
+// Returns the user ID and a boolean indicating whether it was found
+func getUserID(c *gin.Context) (string, bool) {
+	if val, exists := c.Get("user_id"); exists {
+		if userID, ok := val.(string); ok {
+			return userID, true
+		}
+	}
+	return "", false
+}
