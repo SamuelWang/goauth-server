@@ -48,6 +48,40 @@ Here are the common commands for this project.
   go run ./cmd/auth-server
   ```
 
+### Testing
+
+**Prerequisites:** Ensure Docker is installed and running. On Linux, add your user to the docker group:
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+- **Run All Tests:**
+  ```bash
+  go test ./...
+  ```
+
+- **Run Tests with Verbose Output:**
+  ```bash
+  go test -v ./...
+  ```
+
+- **Run Tests with Coverage:**
+  ```bash
+  go test -cover ./...
+  ```
+
+- **Run Tests in a Specific Package:**
+  ```bash
+  go test ./internal/repository
+  ```
+
+- **Run a Specific Test:**
+  ```bash
+  go test -run TestFunctionName ./internal/package
+  ```
+
 ## File Structure
 
 - `cmd/auth-server`: Main application entry point.

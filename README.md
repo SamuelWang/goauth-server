@@ -133,3 +133,79 @@ For development, it's recommended to use Visual Studio Code with the following e
 - `internal/transport/`: Request and response handling.
   - `http/`: HTTP-related code.
 - `scripts/`: Scripts for database management and credential generation.
+
+## Testing
+
+The project uses Go's standard testing framework with additional tools:
+
+- **testify**: For assertions and test utilities
+- **testcontainers-go**: For integration tests with PostgreSQL
+
+### Prerequisites
+
+Before running tests, ensure Docker is installed and running on your system. Testcontainers requires Docker to spin up PostgreSQL instances for integration tests.
+
+**Linux Users:** Add your user to the docker group to run Docker without sudo:
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+Then log out and log back in for the changes to take effect, or run:
+
+```bash
+newgrp docker
+```
+
+**Verify Docker access:**
+
+```bash
+docker ps
+```
+
+If this command runs without errors, you're ready to run tests.
+
+### Running Tests
+
+**Run all tests:**
+
+```bash
+go test ./...
+```
+
+**Run tests with verbose output:**
+
+```bash
+go test -v ./...
+```
+
+**Run tests with coverage:**
+
+```bash
+go test -cover ./...
+```
+
+**Run tests with coverage report:**
+
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+**Run tests in a specific package:**
+
+```bash
+go test ./internal/repository
+```
+
+**Run a specific test:**
+
+```bash
+go test -run TestFunctionName ./internal/package
+```
+
+### Writing Tests
+
+- Test files should be named with the `_test.go` suffix
+- Integration tests use testcontainers to spin up PostgreSQL instances
+- Use testify for assertions: `assert` and `require` packages
