@@ -33,7 +33,7 @@ func (h *WebHandler) GoogleLogin(c *gin.Context) {
 	// Get authorization URL
 	url, err := h.authService.GetGoogleLoginURL(state)
 	if err != nil {
-		log.Printf("Failed to handle Google callback: %v", err)
+		log.Printf("Failed to get Google login URL: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to authenticate"})
 		return
 	}
