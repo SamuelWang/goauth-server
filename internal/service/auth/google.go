@@ -2,16 +2,14 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/util"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -23,6 +21,16 @@ type GoogleUserInfo struct {
 	GivenName     string `json:"given_name"`
 	FamilyName    string `json:"family_name"`
 	Locale        string `json:"locale"`
+}
+
+type IDTokenClaims struct {
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Locale        string `json:"locale"`
+	Picture       string `json:"picture"`
 }
 
 func (s *AuthService) GetGoogleLoginURL(state string) (string, error) {
@@ -46,8 +54,8 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (st
 		return "", fmt.Errorf("failed to exchange code: %w", err)
 	}
 
-	// Get user info from Google
-	userInfo, err := getGoogleUserInfo(ctx, token.AccessToken)
+	// Get user info from ID token (OpenID Connect)
+	userInfo, err := getGoogleUserInfoFromIDToken(ctx, token, s.cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to get user info: %w", err)
 	}
@@ -70,7 +78,12 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (st
 			Provider:      util.StrPtr("google"),
 			ProviderID:    util.StrPtr(userInfo.Sub),
 			ProviderData:  providerData,
-			Locale:        "en-US",
+			Locale: func() string {
+				if userInfo.Locale == "" {
+					return "en-US"
+				}
+				return userInfo.Locale
+			}(),
 			LastLoginAt:   time.Now(),
 		})
 		if err != nil {
@@ -97,32 +110,48 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (st
 	return accessToken, nil
 }
 
-func getGoogleUserInfo(ctx context.Context, accessToken string) (*GoogleUserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+// getGoogleUserInfoFromIDToken extracts user info from the ID token using OpenID Connect
+func getGoogleUserInfoFromIDToken(ctx context.Context, token *oauth2.Token, cfg *config.Config) (*GoogleUserInfo, error) {
+	// Get the ID token from the oauth2 token
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		return nil, fmt.Errorf("no id_token in oauth2 token")
+	}
+
+	// Create OIDC provider
+	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	// Configure ID token verifier
+	verifier := provider.Verifier(&oidc.Config{
+		ClientID: cfg.OAuth.Google.ClientID,
+	})
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	// Verify ID token
+	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("google API error: %s", string(body))
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
 	}
 
-	var userInfo GoogleUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
+	// Extract claims
+	var claims IDTokenClaims
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("failed to parse ID token claims: %w", err)
 	}
 
-	return &userInfo, nil
+	// Convert to GoogleUserInfo
+	userInfo := &GoogleUserInfo{
+		Sub:           claims.Sub,
+		Email:         claims.Email,
+		EmailVerified: claims.EmailVerified,
+		GivenName:     claims.GivenName,
+		FamilyName:    claims.FamilyName,
+		Locale:        claims.Locale,
+	}
+
+	return userInfo, nil
 }
 
 func getGoogleOAuthConfig(cfg *config.Config) *oauth2.Config {

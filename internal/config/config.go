@@ -77,6 +77,7 @@ func Load() (*Config, error) {
 				ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 				ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 				Scopes: []string{
+					"openid",
 					"https://www.googleapis.com/auth/userinfo.email",
 					"https://www.googleapis.com/auth/userinfo.profile",
 				},
