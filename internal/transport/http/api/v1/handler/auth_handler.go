@@ -9,8 +9,6 @@ import (
 
 // Logout invalidates the user's session
 func (h *ApiV1Handler) Logout(c *gin.Context) {
-	cookieSecure, _ := c.Get("cookie_secure")
-
 	// Clear the auth token cookie
 	c.SetCookie(
 		"access_token",
@@ -18,8 +16,8 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 		-1, // Expire immediately
 		"/",
 		"",
-		cookieSecure.(bool), // Secure
-		true,                // HttpOnly
+		getCookieSecure(c), // Secure
+		true,               // HttpOnly
 	)
 
 	c.JSON(http.StatusOK, gin.H{

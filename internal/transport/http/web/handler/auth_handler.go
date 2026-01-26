@@ -20,15 +20,14 @@ func (h *WebHandler) GoogleLogin(c *gin.Context) {
 	}
 
 	// Store state in a secure cookie
-	cookieSecure, _ := c.Get("cookie_secure")
 	c.SetCookie(
 		"oauth_state",
 		state,
 		600, // 10 minutes
 		"/",
 		"",
-		cookieSecure.(bool), // Secure
-		true,                // HttpOnly
+		getCookieSecure(c), // Secure
+		true,               // HttpOnly
 	)
 
 	// Get authorization URL
@@ -54,8 +53,7 @@ func (h *WebHandler) GoogleCallback(c *gin.Context) {
 	}
 
 	// Clear the state cookie
-	cookieSecure, _ := c.Get("cookie_secure")
-	c.SetCookie("oauth_state", "", -1, "/", "", cookieSecure.(bool), true)
+	c.SetCookie("oauth_state", "", -1, "/", "", getCookieSecure(c), true)
 
 	// Get authorization code
 	code := c.Query("code")
@@ -79,8 +77,8 @@ func (h *WebHandler) GoogleCallback(c *gin.Context) {
 		3600, // 1 hour
 		"/",
 		"",
-		cookieSecure.(bool),
-		true, // HttpOnly
+		getCookieSecure(c), // Secure
+		true,               // HttpOnly
 	)
 
 	// Also set SameSite attribute for CSRF protection
