@@ -1,1 +1,17 @@
+# Environment variables
 .env
+
+# IDE
+.vscode
+
+# Build output
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Credentials
+.cert
+

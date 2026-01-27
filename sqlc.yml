@@ -1,0 +1,31 @@
+version: '2'
+overrides:
+  go:
+    overrides:
+      - db_type: "uuid"
+        go_type: "github.com/google/uuid.UUID"
+      - db_type: "uuid"
+        go_type: "github.com/google/uuid.UUID"
+        nullable: true
+      - db_type: "pg_catalog.timestamptz"
+        go_type: "time.Time"
+      - db_type: "pg_catalog.timestamptz"
+        go_type: "time.Time"
+        nullable: true
+sql:
+  - engine: 'postgresql'
+    schema: 'internal/db/schema'
+    queries: 'internal/db/queries'
+    gen:
+      go:
+        package: 'repository'
+        out: 'internal/repository'
+        sql_package: 'pgx/v5'
+        emit_pointers_for_null_types: true
+        overrides:
+          - column: 'users.provider_data'
+            go_type:
+              import: 'github.com/SamuelWang/goauth-server/internal/models'
+              package: 'models'
+              type: 'OAuthProviderData'
+              pointer: true
