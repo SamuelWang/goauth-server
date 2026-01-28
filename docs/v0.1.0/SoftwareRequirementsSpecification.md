@@ -4,16 +4,12 @@
 
 ### Purpose
 
-The purpose of this document is to define the requirements for “Goauth", a web-based application that allows users to sign in and admins to manage user sessions, clients, and authorizations.
+At the initial version, the project infrastructure must be set up. Then, this system completes the Google Identity login flow.
 
 ### Scope
 
-* User registration and authentication (including social logins)  
-* OAuth2 and OIDC protocol support  
-* Client application management  
-* Role-based access control  
-* API endpoints for user and client management  
-* Logging and monitoring for audit and compliance
+* Initializing project infrastructure  
+* Google Identity login support
 
 ## Functional Requirements
 
@@ -21,21 +17,15 @@ The purpose of this document is to define the requirements for “Goauth", a web
 
 #### Sign In
 
-* The system shall allow users to sign in with Google OAuth.
+* The system shall allow users to sign in with Google Identity.
 
 #### Sign Up
 
-* The system shall create user profiles upon first login with Google OAuth.
+* The system shall create user profiles upon first login with Google Identity.
 
 #### Session Management
 
 * The system must issue a JWT access token in the cookie after successful login.
-
-### Logging Module
-
-#### Activity Logging
-
-* The system must log user activities for audits.
 
 ## Non-Functional Requirements
 
