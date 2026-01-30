@@ -1,69 +1,83 @@
-# Software Requirements Specification - v0.2.0
+# Software Requirements Specification \- v0.2.0
 
 ## Introduction
 
 ### Purpose
 
-This version shall enhance the completeness of the Google login flow, add administrator permissions, and support client and token management.
-
-The system shall support client management. The administrators can register clients. The clients can use 
-
-When using the Google login flow to directly get the access token (the access token flow), the client can bring its client
-
-In addition to the direct login flow with the access token, the system supports the code exchange flow. The code exchange flow allows the client to meet the cross-domain requirements.
+This version of the SRS defines the requirements for enhancing the Google login flow, adding administrator capabilities, and implementing client and token management for the "Goauth" server.
 
 ### Scope
 
-* Administrator permission  
-* Client management  
-* Token management  
-* Google login flow
+* Administrator Role and Permissions  
+* Client Application Management (Registration, Update, Deletion)  
+* oken and Code Management  
+* Google Identity Login Flow Enhancements
 
 ## Functional Requirements
 
-### Client Module
+### Client Management Module
 
-#### Registration
+#### Client Management Operations (Admin)
 
-* The system shall be able to register a client. Only administrators can do client registration.  
-* Every client can decide which login flow to use (access token in cookie or code exchange flow)
+* The system shall allow only authenticated administrators to register a new client application.  
+* The client application shall be configured to exclusively use the OAuth 2.0 Authorization Code Grant flow.  
+* The system shall allow only administrators to delete a registered client.  
+* The system shall allow only administrators to update a client's details, including basic data and secret key regeneration.  
+* The server shall provide the necessary RESTful APIs to facilitate all client management operations on the administrator's web interface.  
+  * List clients  
+  * Get a client  
+  * Patch a client  
+  * Regenerate the secret of a client  
+  * Delete a client
 
-#### Management
+### User Module
 
-* The system shall support the client's deletion. Only administrators can delete a client.  
-* The system shall support the client’s update. Only administrators can update a client.
+#### Administrator Flag
+
+* The user data model shall include a boolean flag to designate a user as an administrator.
+
+#### User Management (Admin)
+
+* The system shall provide the necessary APIs for user management functionalities available on the admin website.  
+  * List users  
+  * Disable a user
 
 ### Authentication Module
 
-#### Administrator
+#### Google Login Flow
 
-* The user data shall include a flag indicating whether a user is an administrator.
+* The Google login process shall exclusively support the Authorization Code Grant flow.  
+* The system shall redirect the user to the configured callback URL with an authorization code. The client's server will then use this code to exchange for the actual access token.  
+* The system shall validate that the requested callback URL for redirection matches a pre-registered callback URL for the client.
 
-#### Sign In
+### Session Management Module
 
-* The client can ask the system to redirect users back to a callback URL. The callback URL must match the registered callback URL.  
-* The system shall support the code exchange login flow for Google login. The users shall be redirected to the callback with a code. The client uses the code to exchange the real access token.
+#### Token Tracking
 
-### Session Management
+* The system must persistently track every issued access token within the database for auditing and revocation purposes.
 
-#### Token Management
+#### Code Tracking
 
-* The system must track every issued access token in the database.
+* The system must track the issued authorization code when a client uses the Authorization Code Grant flow.
 
-#### Code Management
+#### Session Management (Admin)
 
-* When a client uses the code exchange login flow, the system must track the issued code.
+* The system shall provide the necessary APIs for session and token management on the administrator's web interface.  
+  * List codes  
+  * List access tokens  
+  * Delete a code  
+  * Delete an access token
 
 ## Non-Functional Requirements
 
 ### Security
 
-* The system must prevent CSRF attacks.  
-* Protection against XSS (Cross-Site Scripting) and injection attacks.  
-* The system shall support CORS.  
-* The expiration of access tokens must be 60 minutes.  
-* The expiration of the exchange code must be 5 minutes.
+* The system must implement measures to prevent Cross-Site Request Forgery (CSRF) attacks.  
+* The system must include protection against Cross-Site Scripting (XSS) and injection attacks (e.g., SQL injection).  
+* The system shall support Cross-Origin Resource Sharing (CORS) as required for web-based clients.  
+* The access token expiration shall not exceed 60 minutes.  
+* The authorization code expiration shall not exceed 5 minutes.
 
 #### Build and Deployment
 
-* The system shall support the Docker container deployment.
+* The system shall support deployment using Docker containers.
