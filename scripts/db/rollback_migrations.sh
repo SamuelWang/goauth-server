@@ -55,7 +55,7 @@ if [[ "$ARG" =~ ^[0-9]+$ ]]; then
     exit 0
   fi
   echo "Rolling back $ARG migration(s)..."
-  migrate -path internal/db/migrations -database "$DB_CONN" steps "-$ARG"
+  migrate -path internal/db/migrations -database "$DB_CONN" down "$ARG"
   echo "Rolled back $ARG migration(s)."
   exit 0
 fi
