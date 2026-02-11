@@ -37,7 +37,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 4 hours
 
 **Steps:**
-1. Create migration file: `db/migrations/YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_oauth_providers_table`
 2. Implement table schema:
    ```sql
    CREATE TABLE oauth_providers (
@@ -60,7 +60,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
    CREATE INDEX idx_oauth_providers_is_enabled ON oauth_providers(is_enabled);
    ```
 4. Add updated_at trigger
-5. Create corresponding `.down.sql` migration
+5. Create rollback migration
 
 **Acceptance Criteria:**
 - [ ] Migration file created and executable
@@ -81,7 +81,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Dependencies:** Existing users table
 
 **Steps:**
-1. Create migration file: `YYYYMMDDHHMMSS_add_is_admin_to_users.up.sql`
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations add_is_admin_to_users`
 2. Add is_admin column:
    ```sql
    ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false;
@@ -108,7 +108,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 4 hours
 
 **Steps:**
-1. Create migration file: `YYYYMMDDHHMMSS_create_clients_table.up.sql`
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_clients_table`
 2. Implement table with all columns per System Design
 3. Create foreign key to users(id) for created_by
 4. Create indexes on id and is_active
@@ -133,7 +133,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 5 hours
 
 **Steps:**
-1. Create migration file: `YYYYMMDDHHMMSS_create_authorization_codes_table.up.sql`
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_authorization_codes_table`
 2. Implement complete table schema
 3. Create foreign keys:
    - client_id → clients(id) ON DELETE CASCADE
@@ -159,7 +159,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 4 hours
 
 **Steps:**
-1. Create migration file: `YYYYMMDDHHMMSS_create_access_tokens_table.up.sql`
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_access_tokens_table`
 2. Implement table schema
 3. Create foreign keys with CASCADE delete
 4. Create indexes on token_hash, expires_at, user_id, client_id
@@ -183,7 +183,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Dependencies:** Task 1.1 complete
 
 **Steps:**
-1. Create seed migration: `YYYYMMDDHHMMSS_seed_google_provider.up.sql`
+1. Create seed migration: `migrate create -ext sql -dir ./db/migrations seed_google_provider`
 2. Insert Google OAuth provider with placeholder credentials:
    ```sql
    INSERT INTO oauth_providers (name, display_name, client_id, client_secret, auth_url, token_url, user_info_url, scopes, is_enabled)
