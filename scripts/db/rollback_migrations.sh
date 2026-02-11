@@ -26,7 +26,7 @@ fi
 
 export DB_CONN="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSLMODE}"
 
-MIGRATIONS_DIR="$REPO_ROOT/internal/db/migrations"
+MIGRATIONS_DIR="$REPO_ROOT/db/migrations"
 
 if [ ! -d "$MIGRATIONS_DIR" ]; then
   echo "Migrations directory not found: $MIGRATIONS_DIR" >&2
@@ -44,7 +44,7 @@ usage() {
 
 if [ "$ARG" = "all" ]; then
   echo "Rolling back all migrations..."
-  migrate -path internal/db/migrations -database "$DB_CONN" down
+  migrate -path db/migrations -database "$DB_CONN" down
   echo "All migrations rolled back."
   exit 0
 fi
@@ -55,7 +55,7 @@ if [[ "$ARG" =~ ^[0-9]+$ ]]; then
     exit 0
   fi
   echo "Rolling back $ARG migration(s)..."
-  migrate -path internal/db/migrations -database "$DB_CONN" down "$ARG"
+  migrate -path db/migrations -database "$DB_CONN" down "$ARG"
   echo "Rolled back $ARG migration(s)."
   exit 0
 fi

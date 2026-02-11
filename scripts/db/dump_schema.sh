@@ -4,7 +4,7 @@ set -euo pipefail
 # locate repo root (fall back to cwd)
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ENV_FILE="$REPO_ROOT/.env"
-TARGET_DIR="$REPO_ROOT/internal/db/schema"
+TARGET_DIR="$REPO_ROOT/db/schema"
 TARGET_FILE="$TARGET_DIR/schema.sql"
 
 # Load environment variables from .env if present

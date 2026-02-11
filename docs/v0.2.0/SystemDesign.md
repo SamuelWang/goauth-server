@@ -723,7 +723,7 @@ Request with Bearer Token → Auth Middleware
 * Update schema dump
 
 ### Phase 2: Repository Layer
-* Write SQL queries in `internal/db/queries/`:
+* Write SQL queries in `db/queries/`:
   * `oauth_providers.sql`
   * `clients.sql`
   * `authorization_codes.sql`
@@ -941,7 +941,7 @@ HTTP/1.1 204 No Content
 
 ### Appendix A: Database Schema SQL
 
-See `internal/db/migrations/` for detailed migration files.
+See `db/migrations/` for detailed migration files.
 
 ### Appendix B: Configuration Reference
 

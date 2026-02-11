@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run DB migrations by executing all *.up.sql files in internal/db/migrations
+# Run DB migrations by executing all *.up.sql files in db/migrations
 # Behavior:
 # - If a .env file exists at repository root it will be sourced and exported.
 # - Required DB variables: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
@@ -27,7 +27,7 @@ fi
 
 export DB_CONN="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSLMODE}"
 
-MIGRATIONS_DIR="$REPO_ROOT/internal/db/migrations"
+MIGRATIONS_DIR="$REPO_ROOT/db/migrations"
 
 if [ ! -d "$MIGRATIONS_DIR" ]; then
   echo "Migrations directory not found: $MIGRATIONS_DIR" >&2

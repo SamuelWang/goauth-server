@@ -37,7 +37,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 4 hours
 
 **Steps:**
-1. Create migration file: `internal/db/migrations/YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
+1. Create migration file: `db/migrations/YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
 2. Implement table schema:
    ```sql
    CREATE TABLE oauth_providers (
@@ -221,7 +221,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Steps:**
 1. Run all migrations on clean database
 2. Execute schema dump script: `./scripts/db/dump_schema.sh`
-3. Verify `internal/db/schema/schema.sql` is updated
+3. Verify `db/schema/schema.sql` is updated
 4. Review schema for correctness
 5. Commit schema dump
 
@@ -232,7 +232,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 - [ ] Schema is properly formatted
 
 **Deliverables:**
-- Updated `internal/db/schema/schema.sql`
+- Updated `db/schema/schema.sql`
 
 ### Phase 1 Completion Checklist
 
@@ -257,7 +257,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Estimated Time:** 6 hours
 
 **Steps:**
-1. Create file: `internal/db/queries/oauth_providers.sql`
+1. Create file: `db/queries/oauth_providers.sql`
 2. Implement queries:
 
 ```sql
@@ -316,7 +316,7 @@ WHERE id = $1;
 - [ ] Generated methods have correct signatures
 
 **Deliverables:**
-- `internal/db/queries/oauth_providers.sql`
+- `db/queries/oauth_providers.sql`
 - Generated Go code in `internal/repository/`
 
 ### 3.2 Task 2.2: Create clients.sql Queries
@@ -325,7 +325,7 @@ WHERE id = $1;
 **Estimated Time:** 6 hours
 
 **Steps:**
-1. Create file: `internal/db/queries/clients.sql`
+1. Create file: `db/queries/clients.sql`
 2. Implement queries for CRUD operations:
    - GetClient
    - ListClients (with pagination and filters)
@@ -343,7 +343,7 @@ WHERE id = $1;
 - [ ] sqlc generation successful
 
 **Deliverables:**
-- `internal/db/queries/clients.sql`
+- `db/queries/clients.sql`
 - Generated repository code
 
 ### 3.3 Task 2.3: Create authorization_codes.sql Queries
@@ -352,7 +352,7 @@ WHERE id = $1;
 **Estimated Time:** 6 hours
 
 **Steps:**
-1. Create file: `internal/db/queries/authorization_codes.sql`
+1. Create file: `db/queries/authorization_codes.sql`
 2. Implement queries:
    - GetAuthorizationCode (by code string)
    - GetAuthorizationCodeByID
@@ -372,7 +372,7 @@ WHERE id = $1;
 - [ ] sqlc generation successful
 
 **Deliverables:**
-- `internal/db/queries/authorization_codes.sql`
+- `db/queries/authorization_codes.sql`
 - Generated repository code
 
 ### 3.4 Task 2.4: Create access_tokens.sql Queries
@@ -381,7 +381,7 @@ WHERE id = $1;
 **Estimated Time:** 6 hours
 
 **Steps:**
-1. Create file: `internal/db/queries/access_tokens.sql`
+1. Create file: `db/queries/access_tokens.sql`
 2. Implement queries:
    - GetAccessToken (by token_hash)
    - GetAccessTokenByID
@@ -401,7 +401,7 @@ WHERE id = $1;
 - [ ] sqlc generation successful
 
 **Deliverables:**
-- `internal/db/queries/access_tokens.sql`
+- `db/queries/access_tokens.sql`
 - Generated repository code
 
 ### 3.5 Task 2.5: Update users.sql Queries
@@ -411,7 +411,7 @@ WHERE id = $1;
 **Dependencies:** Existing users.sql
 
 **Steps:**
-1. Update `internal/db/queries/users.sql`
+1. Update `db/queries/users.sql`
 2. Add queries:
    - ListUsers (with pagination, filters for is_active, is_admin)
    - UpdateUserActiveStatus
@@ -426,7 +426,7 @@ WHERE id = $1;
 - [ ] sqlc generation successful
 
 **Deliverables:**
-- Updated `internal/db/queries/users.sql`
+- Updated `db/queries/users.sql`
 - Updated repository code
 
 ### 3.6 Task 2.6: Write Repository Unit Tests
