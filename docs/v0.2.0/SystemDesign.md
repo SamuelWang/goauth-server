@@ -3,47 +3,80 @@
 ## 1. System Analysis
 
 ### 1.1 Overview
-"Goauth" v0.2.0 extends the authentication and authorization service with administrator capabilities, client application management, and OAuth 2.0 Authorization Code Grant flow. It serves as a centralized identity provider and OAuth2 authorization server, enabling users to sign in via configurable OAuth providers (currently Google only) and allowing administrators to manage users, client applications, OAuth providers, and sessions.
+
+"Goauth" v0.2.0 extends the authentication and authorization service with administrator capabilities, client application management, and OAuth 2.0 Authorization Code Grant flow. It serves as a centralized identity provider and OAuth2 authorization server, enabling users to sign in via client-scoped OAuth providers and allowing administrators to manage users, client applications, and sessions.
+
+**Client-Scoped Provider Architecture:**
+
+Each client application can configure multiple OAuth providers (e.g., Google, GitHub, Microsoft) independently. OAuth providers belong to specific clients, ensuring complete isolation between different client applications. This multi-tenant architecture allows each client to maintain its own OAuth integrations with custom credentials and settings.
+
+**Key Benefits:**
+
+* **Multi-Tenancy:** Different client applications can use the same Goauth instance with isolated configurations
+* **Flexibility:** Each client chooses which OAuth providers to support
+* **Security:** Provider credentials isolated per client - no cross-client access
+* **Scalability:** Same provider type (e.g., "google") can be configured differently for each client
+* **Simplicity:** Clients manage their own OAuth integrations without affecting others
 
 ### 1.2 Actors
+
 * **User:** An end-user who authenticates via a selected OAuth provider to access client applications secured by Goauth.
 * **Administrator:** A privileged user with additional permissions to:
-  * Manage OAuth providers (enable/disable, configure)
   * Manage client applications (CRUD operations)
+  * Manage client-scoped OAuth providers (create, configure, enable/disable, delete)
   * Manage user accounts (list, disable)
   * Manage sessions (list and revoke tokens and codes)
-* **Client Application:** External applications that use Goauth as an OAuth2 authorization server via the Authorization Code Grant flow. Clients select which OAuth provider to use during authentication.
-* **OAuth Provider:** External identity providers (e.g., Google) used for user authentication. Providers must be enabled by administrators before use.
+* **Client Application:** External applications that use Goauth as an OAuth2 authorization server via the Authorization Code Grant flow. Each client can configure multiple OAuth providers for user authentication.
+* **OAuth Provider:** External identity providers (e.g., Google, GitHub, Microsoft) configured by administrators for specific client applications. Each provider belongs to exactly one client and is isolated from other clients' providers.
 
 ### 1.3 Functional Requirements
+
 Based on the Software Requirements Specification (SRS) v0.2.0:
 
 #### Client Management
+
 * Administrators can register new client applications (OAuth 2.0 Authorization Code Grant only)
 * Administrators can list, view, update, and delete client applications
 * Administrators can regenerate client secrets
 * Client applications must have registered redirect URIs for security
+* Each client can configure multiple OAuth providers independently
+* Deleting a client cascades to remove all associated OAuth providers
+
+#### OAuth Provider Management
+
+* OAuth providers are scoped to specific client applications
+* Each provider belongs to exactly one client
+* Administrators can create, update, and delete OAuth providers for a client
+* Administrators can enable or disable specific providers for a client
+* Provider credentials are encrypted before storage
+* Same provider type (e.g., "google") can be configured differently for each client
+* Provider isolation ensures one client cannot access another client's providers
 
 #### User Management
+
 * User data model includes an administrator flag
 * Administrators can list all users
 * Administrators can disable user accounts
 
 #### Authentication & Authorization
+
 * OAuth providers use OAuth 2.0 Authorization Code Grant flow exclusively
-* Clients select an OAuth provider (currently Google only) during authorization request
-* Only enabled OAuth providers can be used for authentication
+* Clients can configure multiple OAuth providers (e.g., Google, GitHub, Microsoft)
+* Only enabled OAuth providers configured for the requesting client can be used
+* System validates provider belongs to requesting client
 * System redirects to client callback URL with authorization code
 * System validates redirect URIs against registered callbacks
 * Clients exchange authorization codes for access tokens
 
 #### Session Management
+
 * All issued access tokens are persisted in the database
 * All issued authorization codes are tracked in the database
 * Administrators can list and revoke authorization codes
 * Administrators can list and revoke access tokens
 
 ### 1.4 Non-Functional Requirements
+
 * **Security:**
   * CSRF protection for state-changing operations
   * XSS and SQL injection prevention
@@ -58,6 +91,7 @@ Based on the Software Requirements Specification (SRS) v0.2.0:
 ## 2. System Design
 
 ### 2.1 Architecture
+
 The project follows a **Clean/Layered Architecture** with the following layers:
 
 * **Presentation Layer (Transport):**
@@ -85,6 +119,7 @@ The project follows a **Clean/Layered Architecture** with the following layers:
   * Utilities: Helper functions and common code
 
 ### 2.2 Technology Stack
+
 * **Language:** Go 1.25+
 * **Web Framework:** Gin (`github.com/gin-gonic/gin`)
 * **Database:** PostgreSQL 16+
@@ -103,34 +138,13 @@ The project follows a **Clean/Layered Architecture** with the following layers:
 ### 2.3 Database Design
 
 #### Schema Overview
+
 PostgreSQL database with `pgcrypto` extension for UUID generation and secure random functions.
 
 #### Tables
 
-**1. `oauth_providers`**
-Stores available OAuth provider configurations.
+**1. `users`**
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK, Default: `gen_random_uuid()` | Unique provider identifier |
-| `name` | TEXT | Unique, Not Null | Provider name (e.g., 'google') |
-| `display_name` | TEXT | Not Null | Human-readable name |
-| `client_id` | TEXT | Not Null | OAuth client ID |
-| `client_secret` | TEXT | Not Null | OAuth client secret (encrypted) |
-| `auth_url` | TEXT | Not Null | Authorization endpoint URL |
-| `token_url` | TEXT | Not Null | Token exchange endpoint URL |
-| `user_info_url` | TEXT | Not Null | User info endpoint URL |
-| `scopes` | TEXT[] | Not Null | Default scopes to request |
-| `is_enabled` | BOOLEAN | Default: false | Provider enabled status |
-| `created_at` | TIMESTAMPTZ | Default: now() | Record creation time |
-| `updated_at` | TIMESTAMPTZ | Default: now() | Last update time |
-
-*Indexes:*
-* `oauth_providers_pkey` PRIMARY KEY on `id`
-* `oauth_providers_name_key` UNIQUE on `name`
-* `idx_oauth_providers_is_enabled` on `is_enabled`
-
-**2. `users`**
 Stores user profiles and authentication information.
 
 | Column | Type | Constraints | Description |
@@ -151,11 +165,13 @@ Stores user profiles and authentication information.
 | `updated_at` | TIMESTAMPTZ | Default: now() | Last update time |
 
 *Indexes:*
+
 * `users_email_key` UNIQUE on `email`
 * `users_provider_provider_id_key` UNIQUE on `(provider, provider_id)`
 * `idx_users_is_admin` on `is_admin` for fast admin queries
 
-**3. `clients`**
+**2. `clients`**
+
 Stores registered OAuth2 client applications.
 
 | Column | Type | Constraints | Description |
@@ -172,11 +188,46 @@ Stores registered OAuth2 client applications.
 | `updated_at` | TIMESTAMPTZ | Default: now() | Last update time |
 
 *Indexes:*
+
 * `clients_pkey` PRIMARY KEY on `id`
 * `idx_clients_is_active` on `is_active`
 * Foreign key: `clients_created_by_fkey` references `users(id)`
 
+**3. `oauth_providers`**
+
+Stores OAuth provider configurations scoped to specific client applications.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK, Default: `gen_random_uuid()` | Unique provider identifier |
+| `client_id` | UUID | FK -> clients(id), Not Null | Client this provider belongs to |
+| `name` | TEXT | Not Null | Provider name (e.g., 'google', 'github') |
+| `display_name` | TEXT | Not Null | Human-readable name |
+| `provider_client_id` | TEXT | Not Null | OAuth provider's client ID |
+| `provider_client_secret` | TEXT | Not Null | OAuth provider's client secret (encrypted) |
+| `auth_url` | TEXT | Not Null | Authorization endpoint URL |
+| `token_url` | TEXT | Not Null | Token exchange endpoint URL |
+| `user_info_url` | TEXT | Not Null | User info endpoint URL |
+| `scopes` | TEXT[] | Not Null | Default scopes to request |
+| `is_enabled` | BOOLEAN | Default: false | Provider enabled status |
+| `created_at` | TIMESTAMPTZ | Default: now() | Record creation time |
+| `updated_at` | TIMESTAMPTZ | Default: now() | Last update time |
+
+*Constraints:*
+
+* UNIQUE `(client_id, name)` - Same client cannot have duplicate provider names
+
+*Indexes:*
+
+* `oauth_providers_pkey` PRIMARY KEY on `id`
+* `oauth_providers_client_id_name_key` UNIQUE on `(client_id, name)`
+* `idx_oauth_providers_client_id` on `client_id`
+* `idx_oauth_providers_is_enabled` on `is_enabled`
+* `idx_oauth_providers_client_enabled` on `(client_id, is_enabled)` for fast enabled provider lookups
+* Foreign key: `oauth_providers_client_id_fkey` references `clients(id) ON DELETE CASCADE`
+
 **4. `authorization_codes`**
+
 Tracks issued authorization codes for the Authorization Code Grant flow.
 
 | Column | Type | Constraints | Description |
@@ -197,6 +248,7 @@ Tracks issued authorization codes for the Authorization Code Grant flow.
 | `created_at` | TIMESTAMPTZ | Default: now() | Record creation time |
 
 *Indexes:*
+
 * `authorization_codes_pkey` PRIMARY KEY on `id`
 * `authorization_codes_code_key` UNIQUE on `code`
 * `idx_authorization_codes_expires_at` on `expires_at`
@@ -209,6 +261,7 @@ Tracks issued authorization codes for the Authorization Code Grant flow.
   * `authorization_codes_provider_id_fkey` references `oauth_providers(id) ON DELETE CASCADE`
 
 **5. `access_tokens`**
+
 Stores issued access tokens for auditing and revocation.
 
 | Column | Type | Constraints | Description |
@@ -223,6 +276,7 @@ Stores issued access tokens for auditing and revocation.
 | `created_at` | TIMESTAMPTZ | Default: now() | Token issuance time |
 
 *Indexes:*
+
 * `access_tokens_pkey` PRIMARY KEY on `id`
 * `access_tokens_token_hash_key` UNIQUE on `token_hash`
 * `idx_access_tokens_expires_at` on `expires_at`
@@ -233,6 +287,7 @@ Stores issued access tokens for auditing and revocation.
   * `access_tokens_user_id_fkey` references `users(id) ON DELETE CASCADE`
 
 **6. `schema_migrations`**
+
 Tracks database migration state (managed by golang-migrate).
 
 | Column | Type | Constraints | Description |
@@ -241,78 +296,98 @@ Tracks database migration state (managed by golang-migrate).
 | `dirty` | BOOLEAN | Not Null | Migration state |
 
 #### Database Triggers
-* `set_updated_at` trigger on `oauth_providers`, `users`, `clients` tables to automatically update `updated_at` timestamp
+
+* `set_updated_at` trigger on `users`, `clients`, `oauth_providers` tables to automatically update `updated_at` timestamp
 
 ### 2.4 API Design
 
 The API follows RESTful principles and is organized into three main groups:
 
 #### 2.4.1 Web Endpoints (`/web`)
+
 User-facing web authentication flows.
 
 **OAuth Provider Authentication Flow:**
-* `GET /web/auth/{provider}/login?client_id={client_id}&redirect_uri={uri}&state={state}`
+
+* `GET /web/auth/{client_id}/{provider}/login?redirect_uri={uri}&state={state}`
   * Parameters:
-    * `provider` - OAuth provider name (e.g., 'google')
     * `client_id` - Client application identifier
+    * `provider` - OAuth provider name (e.g., 'google', 'github')
     * `redirect_uri` - Client callback URI
     * `state` - CSRF protection token
-  * Validates provider is enabled
-  * Validates client_id and redirect_uri
+  * Validates client_id exists and is active
+  * Validates provider exists for this client and is enabled
+  * Validates redirect_uri matches client's registered URIs
   * Redirects to provider's consent screen
   
-* `GET /web/auth/{provider}/callback?code={code}&state={state}`
+* `GET /web/auth/{client_id}/{provider}/callback?code={code}&state={state}`
   * Handles OAuth provider callback
+  * Validates client and provider ownership
   * Exchanges code for provider ID token
   * Creates/updates user account
   * Generates authorization code
   * Redirects to client's redirect_uri with authorization code
 
 #### 2.4.2 API Endpoints (`/api/v1`)
+
 JSON-based RESTful API for programmatic access.
 
 **Authentication:**
-* `GET /api/v1/auth/providers`
-  * Public endpoint listing enabled OAuth providers
-  * Response: `[{ "name": "google", "display_name": "Google" }]`
+
+* `GET /api/v1/clients/{client_id}/auth/providers`
+  * Public endpoint listing enabled OAuth providers for a specific client
+  * Response: `[{ "id": "...", "name": "google", "display_name": "Google" }]`
   * Used by clients to discover available authentication methods
 
 * `POST /api/v1/auth/token`
   * Request Body: `{ "grant_type": "authorization_code", "code": "...", "client_id": "...", "client_secret": "...", "redirect_uri": "..." }`
   * Response: `{ "access_token": "...", "token_type": "Bearer", "expires_in": 3600 }`
   * Exchanges authorization code for access token
+  * Validates client credentials and authorization code
 
 * `POST /api/v1/auth/logout`
   * Requires: Bearer token authentication
   * Revokes the current access token
 
 **OAuth Provider Management (Admin Only):**
-* `GET /api/v1/providers`
-  * Lists all OAuth providers
+
+* `GET /api/v1/clients/{client_id}/providers`
+  * Lists all OAuth providers for a specific client
   * Response: List of providers with configuration (secrets excluded)
+  * Admin only - validates client ownership
 
-* `GET /api/v1/providers/:id`
+* `GET /api/v1/clients/{client_id}/providers/{id}`
   * Retrieves provider details by ID
-  * Excludes client_secret
+  * Validates provider belongs to specified client
+  * Excludes provider_client_secret
+  * Admin only
 
-* `POST /api/v1/providers`
-  * Request Body: `{ "name": "google", "display_name": "Google", "client_id": "...", "client_secret": "...", "auth_url": "...", "token_url": "...", "user_info_url": "...", "scopes": ["openid", "email", "profile"] }`
-  * Creates new OAuth provider configuration
+* `POST /api/v1/clients/{client_id}/providers`
+  * Request Body: `{ "name": "google", "display_name": "Google", "provider_client_id": "...", "provider_client_secret": "...", "auth_url": "...", "token_url": "...", "user_info_url": "...", "scopes": ["openid", "email", "profile"] }`
+  * Creates new OAuth provider configuration for the specified client
+  * Enforces unique (client_id, name) constraint
+  * Admin only
 
-* `PATCH /api/v1/providers/:id`
-  * Request Body: `{ "is_enabled": true, "client_id": "...", "scopes": [...] }`
+* `PATCH /api/v1/clients/{client_id}/providers/{id}`
+  * Request Body: `{ "is_enabled": true, "provider_client_id": "...", "scopes": [...] }`
   * Updates provider configuration
+  * Validates provider belongs to specified client
+  * Admin only
 
-* `DELETE /api/v1/providers/:id`
-  * Disables OAuth provider (sets is_enabled=false)
+* `DELETE /api/v1/clients/{client_id}/providers/{id}`
+  * Deletes OAuth provider
+  * Validates provider belongs to specified client
+  * Cascades to revoke associated authorization codes
+  * Admin only
 
 **Client Management (Admin Only):**
+
 * `GET /api/v1/clients`
   * Query params: `?page=1&limit=20&is_active=true`
   * Lists all registered clients
   * Response: Paginated client list
 
-* `GET /api/v1/clients/:id`
+* `GET /api/v1/clients/{id}`
   * Retrieves client details by ID
   * Excludes client_secret_hash
 
@@ -321,45 +396,48 @@ JSON-based RESTful API for programmatic access.
   * Response: `{ "id": "...", "client_secret": "...", ... }`
   * Note: client_secret is only returned once at creation
 
-* `PATCH /api/v1/clients/:id`
+* `PATCH /api/v1/clients/{id}`
   * Request Body: `{ "name": "...", "description": "...", "redirect_uris": [...], "is_active": true }`
   * Updates client configuration
 
-* `POST /api/v1/clients/:id/regenerate-secret`
+* `POST /api/v1/clients/{id}/regenerate-secret`
   * Generates new client secret
   * Response: `{ "client_secret": "..." }`
   * Note: Old secret is immediately invalidated
 
-* `DELETE /api/v1/clients/:id`
+* `DELETE /api/v1/clients/{id}`
   * Soft deletes client (sets is_active=false)
   * Cascades to revoke all tokens and codes
 
 **User Management (Admin Only):**
+
 * `GET /api/v1/users`
   * Query params: `?page=1&limit=20&is_active=true&is_admin=false`
   * Lists all users
   * Response: Paginated user list
 
-* `PATCH /api/v1/users/:id`
+* `PATCH /api/v1/users/{id}`
   * Request Body: `{ "is_active": false }`
   * Disables/enables user account
 
 **Session Management (Admin Only):**
+
 * `GET /api/v1/sessions/codes`
   * Query params: `?page=1&limit=20&client_id=...&user_id=...&is_revoked=false`
   * Lists authorization codes
   
-* `DELETE /api/v1/sessions/codes/:id`
+* `DELETE /api/v1/sessions/codes/{id}`
   * Revokes an authorization code
 
 * `GET /api/v1/sessions/tokens`
   * Query params: `?page=1&limit=20&client_id=...&user_id=...&is_revoked=false`
   * Lists access tokens
   
-* `DELETE /api/v1/sessions/tokens/:id`
+* `DELETE /api/v1/sessions/tokens/{id}`
   * Revokes an access token
 
 #### 2.4.3 Operational Endpoints (`/ops`)
+
 * `GET /ops/health`
   * Returns: `{ "status": "ok", "timestamp": "..." }`
   * Health check endpoint
@@ -367,6 +445,7 @@ JSON-based RESTful API for programmatic access.
 ### 2.5 OAuth 2.0 Authorization Code Grant Flow
 
 #### Flow Diagram
+
 ```
 User → Client App → Goauth → OAuth Provider → Goauth → Client App → Goauth → Client App
 ```
@@ -374,45 +453,53 @@ User → Client App → Goauth → OAuth Provider → Goauth → Client App → 
 #### Detailed Steps:
 
 **1. Authorization Request**
+
 ```
 Client redirects user to:
-GET /web/auth/{provider}/login?
-    client_id=<client_id>&
+GET /web/auth/{client_id}/{provider}/login?
     redirect_uri=<client_redirect_uri>&
     state=<random_state>&
     scope=openid email profile
 ```
 
 **2. Goauth Validation**
-* Validates provider exists and is enabled
+
 * Validates client_id exists and is active
-* Validates redirect_uri matches registered URIs
-* Retrieves provider configuration from database
-* Stores state in session for CSRF protection
+* Validates provider exists and belongs to the specified client
+* Validates provider is enabled for this client
+* Validates redirect_uri matches client's registered URIs
+* Retrieves provider configuration from database for this client
+* Stores state in session with client context for CSRF protection
 * Redirects to OAuth provider's authorization endpoint
 
 **3. OAuth Provider Authentication**
+
 * User authenticates with selected OAuth provider
 * User consents to requested scopes
 * OAuth provider redirects back to Goauth
 
 **4. Provider Callback**
+
 ```
-GET /web/auth/{provider}/callback?
+GET /web/auth/{client_id}/{provider}/callback?
     code=<provider_code>&
     state=<state>
 ```
 
 **5. Goauth Processing**
+
 * Validates state parameter (CSRF check)
+* Validates client and provider ownership
+* Retrieves provider configuration for this client
 * Exchanges provider code for ID token using provider's token endpoint
 * Verifies ID token signature
 * Extracts user information from provider
 * Creates or updates user in database (with provider and provider_id)
 * Generates authorization code (valid for 5 minutes)
-* Stores code in `authorization_codes` table with provider_id
+* Stores code in `authorization_codes` table with provider_id and client_id
 
 **6. Redirect to Client**
+
 ```
 Redirect to: <client_redirect_uri>?
     code=<authorization_code>&
@@ -420,6 +507,7 @@ Redirect to: <client_redirect_uri>?
 ```
 
 **7. Token Exchange**
+
 ```
 Client makes backend request:
 POST /api/v1/auth/token
@@ -433,6 +521,7 @@ POST /api/v1/auth/token
 ```
 
 **8. Token Issuance**
+
 * Validates client credentials
 * Validates authorization code:
   * Not expired (< 5 minutes)
@@ -446,6 +535,7 @@ POST /api/v1/auth/token
 * Returns access token to client
 
 **9. API Access**
+
 ```
 Client makes requests with:
 Authorization: Bearer <access_token>
@@ -456,23 +546,29 @@ Authorization: Bearer <access_token>
 #### 2.6.1 Authentication & Authorization
 
 **User Authentication:**
-* OAuth 2.0 providers as the authentication method (currently Google only)
-* Provider must be enabled in the system before use
+
+* OAuth 2.0 providers as the authentication method
+* Providers are scoped to specific clients
+* Provider must be enabled for the requesting client before use
+* Client ownership validated during provider selection
 * ID token verification using provider's public keys
-* Provider configuration stored securely in database
+* Provider configuration stored securely in database (credentials encrypted)
 * Email verification status tracked
 
 **Client Authentication:**
+
 * Client ID and secret for token endpoint
 * Client secret stored as bcrypt hash (cost factor 12)
 * Secrets are cryptographically random (32 bytes, base64url encoded)
 
 **Administrator Authorization:**
+
 * `is_admin` flag in users table
 * Middleware checks admin status for protected routes
 * Admin-only endpoints reject non-admin users with 403 Forbidden
 
 **Token-based Authorization:**
+
 * JWT access tokens with ES256 signature
 * Token payload includes: user_id, client_id, scope, exp, iat
 * Middleware validates token signature and expiration
@@ -481,15 +577,18 @@ Authorization: Bearer <access_token>
 #### 2.6.2 CSRF Protection
 
 **State Parameter:**
+
 * Random state parameter generated for each OAuth flow
 * Stored in encrypted session cookie
 * Validated on callback to prevent CSRF attacks
 
 **SameSite Cookies:**
+
 * Session cookies use `SameSite=Lax` or `Strict`
 * Prevents cross-site request forgery
 
 **Double Submit Cookie (Future):**
+
 * For API endpoints, implement double submit cookie pattern
 * CSRF token in both cookie and request header
 
@@ -523,10 +622,12 @@ Authorization: Bearer <access_token>
 #### 2.6.7 Secret Management
 
 **OAuth Provider Secrets:**
-* Stored encrypted in database using AES-256-GCM
+* Provider credentials (provider_client_id, provider_client_secret) stored in database
+* Stored encrypted using AES-256-GCM
 * Encryption key stored in environment variable or secrets manager
 * Never returned in API responses
 * Updated via admin API with automatic re-encryption
+* Isolated per client - one client cannot access another's provider credentials
 
 **Client Secrets:**
 * Generated using `crypto/rand` (32 bytes)
@@ -569,6 +670,7 @@ Authorization: Bearer <access_token>
 ### 2.7 Data Flow Diagrams
 
 #### 2.7.1 Client Registration Flow
+
 ```
 Admin → POST /api/v1/clients → Service Layer
                                      ↓
@@ -583,9 +685,24 @@ Admin → POST /api/v1/clients → Service Layer
                               INSERT INTO clients
                                      ↓
                               Return Client + Secret (one-time)
+
+Admin → POST /api/v1/clients/{client_id}/providers → Service Layer
+                                                           ↓
+                                                    Validate Client Exists
+                                                           ↓
+                                                    Validate Input
+                                                           ↓
+                                                    Encrypt Provider Secret
+                                                           ↓
+                                                    Repository Layer
+                                                           ↓
+                                                    INSERT INTO oauth_providers
+                                                           ↓
+                                                    Return Provider (secret excluded)
 ```
 
 #### 2.7.2 Token Validation Flow
+
 ```
 Request with Bearer Token → Auth Middleware
                                   ↓
@@ -607,6 +724,7 @@ Request with Bearer Token → Auth Middleware
 ### 2.8 Error Handling
 
 #### Error Response Format
+
 ```json
 {
   "error": "invalid_request",
@@ -616,6 +734,7 @@ Request with Bearer Token → Auth Middleware
 ```
 
 #### HTTP Status Codes
+
 * `200 OK` - Successful request
 * `201 Created` - Resource created
 * `204 No Content` - Successful deletion
@@ -629,6 +748,7 @@ Request with Bearer Token → Auth Middleware
 * `500 Internal Server Error` - Server error
 
 #### OAuth 2.0 Error Codes
+
 * `invalid_request` - Malformed request
 * `invalid_client` - Client authentication failed
 * `invalid_grant` - Authorization code invalid/expired
@@ -645,21 +765,23 @@ Request with Bearer Token → Auth Middleware
 │   Docker Compose / Kubernetes       │
 ├─────────────────────────────────────┤
 │                                     │
-│  ┌──────────────┐  ┌─────────────┐ │
-│  │  Goauth API  │  │ PostgreSQL  │ │
-│  │  Container   │  │  Container  │ │
-│  │  (Port 8080) │  │ (Port 5432) │ │
-│  └──────────────┘  └─────────────┘ │
+│  ┌──────────────┐  ┌─────────────┐  │
+│  │  Goauth API  │  │ PostgreSQL  │  │
+│  │  Container   │  │  Container  │  │
+│  │  (Port 8080) │  │ (Port 5432) │  │
+│  └──────────────┘  └─────────────┘  │
 │                                     │
 └─────────────────────────────────────┘
 ```
 
 #### Environment Configuration
+
 * Development: `.env` file with `godotenv`
 * Production: Kubernetes secrets or cloud secret manager
 * Configuration validation on startup
 
 #### Database Migrations
+
 * Automated on container startup
 * Version tracking in `schema_migrations`
 * Rollback capability for failed migrations
@@ -667,6 +789,7 @@ Request with Bearer Token → Auth Middleware
 ### 2.10 Monitoring and Logging
 
 #### Logging Strategy
+
 * Structured logging (JSON format)
 * Log levels: DEBUG, INFO, WARN, ERROR
 * Request ID for tracing
@@ -677,6 +800,7 @@ Request with Bearer Token → Auth Middleware
   * Client secret regenerations
 
 #### Metrics (Future)
+
 * Request count by endpoint
 * Response time percentiles
 * Error rates
@@ -686,18 +810,21 @@ Request with Bearer Token → Auth Middleware
 ### 2.11 Testing Strategy
 
 #### Unit Tests
+
 * Service layer business logic
 * Middleware functions
 * Utility functions
 * Target: >80% code coverage
 
 #### Integration Tests
+
 * Repository layer with test database
 * End-to-end API flows
 * OAuth flow testing
 * Database transactions
 
 #### Security Tests
+
 * SQL injection attempts
 * XSS payload testing
 * CSRF token validation
@@ -705,6 +832,7 @@ Request with Bearer Token → Auth Middleware
 * Rate limiting
 
 #### Test Database
+
 * Docker-based PostgreSQL for tests
 * Automatic cleanup between tests
 * Seeded test data for consistency
@@ -712,17 +840,21 @@ Request with Bearer Token → Auth Middleware
 ## 3. Implementation Plan
 
 ### Phase 1: Database Schema
-* Create migrations for new tables:
-  * `oauth_providers`
+
+* Create migrations for new tables (in order):
+  * Update `users` table with `is_admin` column
   * `clients`
+  * `oauth_providers` (with client_id FK)
   * `authorization_codes`
   * `access_tokens`
-* Add `is_admin` column to `users` table
 * Create indexes and foreign keys
-* Seed initial Google OAuth provider configuration
+* Add unique constraint on (client_id, name) for oauth_providers
+* Configure CASCADE delete from clients to oauth_providers
+* Optional: Seed development data (admin user, sample client, sample provider)
 * Update schema dump
 
 ### Phase 2: Repository Layer
+
 * Write SQL queries in `db/queries/`:
   * `oauth_providers.sql`
   * `clients.sql`
@@ -733,23 +865,28 @@ Request with Bearer Token → Auth Middleware
 * Write repository tests
 
 ### Phase 3: Service Layer
-* Implement OAuth provider management service
+
+* Implement client-scoped OAuth provider management service
 * Implement client management service
-* Implement authorization code flow service (with provider selection)
+* Implement authorization code flow service (with client-provider validation)
 * Implement token management service
 * Add administrator authorization checks
+* Add client ownership validation for provider operations
 * Write service layer tests
 
 ### Phase 4: API Layer
-* Implement OAuth provider management endpoints
+
+* Implement client-scoped OAuth provider management endpoints (nested under clients)
 * Implement client management endpoints
 * Implement OAuth 2.0 token endpoint
 * Implement session management endpoints
-* Update OAuth flow for provider-based Authorization Code Grant
+* Update OAuth web flow for client-scoped providers
 * Add admin middleware
-* Write API integration tests
+* Add client ownership validation middleware
+* Write API integration tests (including provider isolation tests)
 
 ### Phase 5: Security Hardening
+
 * Implement rate limiting
 * Add CORS configuration
 * Enhance CSRF protection
@@ -757,6 +894,7 @@ Request with Bearer Token → Auth Middleware
 * Add security logging
 
 ### Phase 6: Documentation & Deployment
+
 * API documentation (OpenAPI/Swagger)
 * Administrator guide
 * Client integration guide
@@ -768,6 +906,7 @@ Request with Bearer Token → Auth Middleware
 ### 4.1 Client Registration
 
 **Request:**
+
 ```http
 POST /api/v1/clients
 Authorization: Bearer <admin_token>
@@ -784,6 +923,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 201 Created
 Content-Type: application/json
@@ -808,16 +948,17 @@ Content-Type: application/json
 ### 4.2 OAuth Provider Configuration (Admin)
 
 **Request:**
+
 ```http
-POST /api/v1/providers
+POST /api/v1/clients/550e8400-e29b-41d4-a716-446655440000/providers
 Authorization: Bearer <admin_token>
 Content-Type: application/json
 
 {
   "name": "google",
   "display_name": "Google",
-  "client_id": "xxx.apps.googleusercontent.com",
-  "client_secret": "GOCSPX-xxx",
+  "provider_client_id": "xxx.apps.googleusercontent.com",
+  "provider_client_secret": "GOCSPX-xxx",
   "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
   "token_url": "https://oauth2.googleapis.com/token",
   "user_info_url": "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -827,15 +968,17 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 201 Created
 Content-Type: application/json
 
 {
   "id": "440e8400-e29b-41d4-a716-446655440000",
+  "client_id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "google",
   "display_name": "Google",
-  "client_id": "xxx.apps.googleusercontent.com",
+  "provider_client_id": "xxx.apps.googleusercontent.com",
   "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
   "token_url": "https://oauth2.googleapis.com/token",
   "user_info_url": "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -846,22 +989,25 @@ Content-Type: application/json
 }
 ```
 
-**Note:** The `client_secret` is encrypted and stored securely, never returned in responses.
+**Note:** The `provider_client_secret` is encrypted and stored securely, never returned in responses. This provider is now scoped to client `550e8400-e29b-41d4-a716-446655440000` and isolated from other clients.
 
 ### 4.3 Authorization Flow
 
-**Step 1: Redirect to Login (using Google provider)**
+**Step 1: Redirect to Login (using Google provider for client)**
+
 ```http
-GET /web/auth/google/login?client_id=550e8400-e29b-41d4-a716-446655440000&redirect_uri=https://myapp.com/auth/callback&state=xyz123&scope=openid%20email%20profile
+GET /web/auth/550e8400-e29b-41d4-a716-446655440000/google/login?redirect_uri=https://myapp.com/auth/callback&state=xyz123&scope=openid%20email%20profile
 ```
 
 **Step 2: User redirected back to client**
+
 ```http
 HTTP/1.1 302 Found
 Location: https://myapp.com/auth/callback?code=AUTH_CODE_HERE&state=xyz123
 ```
 
 **Step 3: Exchange code for token**
+
 ```http
 POST /api/v1/auth/token
 Content-Type: application/json
@@ -876,6 +1022,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -888,15 +1035,68 @@ Content-Type: application/json
 }
 ```
 
-### 4.4 List Users (Admin)
+### 4.4 List Providers for Client (Admin)
 
-**Request:****
+**Request:**
+
+```http
+GET /api/v1/clients/550e8400-e29b-41d4-a716-446655440000/providers
+Authorization: Bearer <admin_token>
+```
+
+**Response:**
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "data": [
+    {
+      "id": "440e8400-e29b-41d4-a716-446655440000",
+      "client_id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "google",
+      "display_name": "Google",
+      "provider_client_id": "xxx.apps.googleusercontent.com",
+      "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token_url": "https://oauth2.googleapis.com/token",
+      "user_info_url": "https://www.googleapis.com/oauth2/v2/userinfo",
+      "scopes": ["openid", "email", "profile"],
+      "is_enabled": true,
+      "created_at": "2026-01-30T10:00:00Z",
+      "updated_at": "2026-01-30T10:00:00Z"
+    },
+    {
+      "id": "440e8400-e29b-41d4-a716-446655440001",
+      "client_id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "github",
+      "display_name": "GitHub",
+      "provider_client_id": "Iv1.xxxxx",
+      "auth_url": "https://github.com/login/oauth/authorize",
+      "token_url": "https://github.com/login/oauth/access_token",
+      "user_info_url": "https://api.github.com/user",
+      "scopes": ["read:user", "user:email"],
+      "is_enabled": true,
+      "created_at": "2026-01-30T10:30:00Z",
+      "updated_at": "2026-01-30T10:30:00Z"
+    }
+  ]
+}
+```
+
+**Note:** Provider credentials (provider_client_secret) are never returned in API responses. This shows a client with both Google and GitHub providers configured.
+
+### 4.5 List Users (Admin)
+
+**Request:**
+
 ```http
 GET /api/v1/users?page=1&limit=20&is_active=true
 Authorization: Bearer <admin_token>
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -924,15 +1124,17 @@ Content-Type: application/json
 }
 ```
 
-### 4.5 Revoke Token (Admin)
+### 4.6 Revoke Token (Admin)
 
-**Request:****
+**Request:**
+
 ```http
 DELETE /api/v1/sessions/tokens/770e8400-e29b-41d4-a716-446655440002
 Authorization: Bearer <admin_token>
 ```
 
 **Response:**
+
 ```http
 HTTP/1.1 204 No Content
 ```
@@ -946,6 +1148,7 @@ See `db/migrations/` for detailed migration files.
 ### Appendix B: Configuration Reference
 
 **Environment Variables:**
+
 ```bash
 # Server
 SERVER_PORT=8080
@@ -969,7 +1172,7 @@ ALLOWED_ORIGINS=https://admin.example.com,https://app.example.com
 CSRF_SECRET=<random-32-byte-hex>
 ```
 
-**Note:** OAuth provider configurations (Google, etc.) are managed through the database and admin API, not environment variables.
+**Note:** OAuth provider configurations are client-scoped and managed through the database via admin API. Each client configures its own providers with independent credentials.
 
 ### Appendix C: Client Secret Format
 
@@ -982,6 +1185,7 @@ Client secrets are generated as follows:
 ### Appendix D: JWT Token Structure
 
 **Header:**
+
 ```json
 {
   "alg": "ES256",
@@ -990,6 +1194,7 @@ Client secrets are generated as follows:
 ```
 
 **Payload:**
+
 ```json
 {
   "sub": "660e8400-e29b-41d4-a716-446655440001",
@@ -1002,6 +1207,7 @@ Client secrets are generated as follows:
 ```
 
 **Claims:**
+
 * `sub` - User ID (subject)
 * `client_id` - Client application ID
 * `scope` - Granted scopes
@@ -1013,9 +1219,11 @@ Client secrets are generated as follows:
 
 * **Authorization Code:** Short-lived code exchanged for access token
 * **Access Token:** JWT bearer token for API authentication
-* **Client:** Registered OAuth 2.0 client application
+* **Client:** Registered OAuth 2.0 client application that can configure multiple OAuth providers
+* **Client-Scoped Provider:** OAuth provider configuration that belongs to a specific client, isolated from other clients
 * **Grant Type:** OAuth 2.0 flow type (Authorization Code Grant)
-* **OAuth Provider:** External identity provider (e.g., Google) that authenticates users
+* **OAuth Provider:** External identity provider (e.g., Google, GitHub, Microsoft) configured by a client for user authentication
+* **Provider Isolation:** Security feature ensuring one client cannot access or use another client's OAuth providers
 * **PKCE:** Proof Key for Code Exchange (optional extension)
 * **Redirect URI:** Client URL where user is redirected after authorization
 * **Scope:** Requested permissions (e.g., openid, email, profile)
