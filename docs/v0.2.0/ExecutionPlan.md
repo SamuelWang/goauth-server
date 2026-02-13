@@ -10,17 +10,34 @@
 
 This document provides a detailed, step-by-step execution plan for implementing version 0.2.0 of the Goauth authentication and authorization service. The implementation is structured into 6 sequential phases, each with specific tasks, deliverables, and acceptance criteria.
 
+### 1.0 Architectural Overview
+
+**Client-Scoped OAuth Provider Model:**
+
+Version 0.2.0 implements a client-scoped OAuth provider architecture where:
+
+- Each OAuth provider belongs to a specific client application
+- Clients can configure multiple OAuth providers (e.g., Google, GitHub, Microsoft)
+- Providers are isolated between clients - Client A's providers are independent from Client B's providers
+- The same provider type (e.g., "google") can be configured differently for each client
+- This enables multi-tenancy and allows each client application to maintain its own OAuth integrations
+
+This architecture provides flexibility for SaaS scenarios where different client applications need different OAuth configurations and provider options.
+
 ### 1.1 Project Objectives
+
 * Implement OAuth 2.0 Authorization Code Grant flow
-* Enable configurable OAuth provider management (starting with Google)
+* Enable client-scoped OAuth provider management (each client can configure multiple providers)
 * Implement administrator capabilities for managing users, clients, and sessions
 * Establish secure token and session management
 * Deploy containerized solution with PostgreSQL backend
 
 ### 1.2 Key Deliverables
-* Database schema with 6 tables (oauth_providers, users, clients, authorization_codes, access_tokens, schema_migrations)
+
+* Database schema with 6 tables (users, clients, oauth_providers, authorization_codes, access_tokens, schema_migrations)
+* OAuth providers scoped to clients with many-to-one relationship
 * Complete API with 3 router groups (web, api, ops)
-* Admin management interface for providers, clients, users, and sessions
+* Admin management interface for clients, client-scoped providers, users, and sessions
 * Security features including rate limiting, CORS, CSRF protection
 * Docker deployment configuration
 * Comprehensive test coverage (>80%)
@@ -31,50 +48,35 @@ This document provides a detailed, step-by-step execution plan for implementing 
 **Dependencies:** None  
 **Owner:** Backend Team
 
-### 2.1 Task 1.1: Create oauth_providers Migration
+### 2.1 Task 1.1: Create clients Table Migration
 
 **Priority:** High  
-**Estimated Time:** 4 hours
+**Estimated Time:** 4 hours  
+**Dependencies:** Task 1.2 complete (users table must exist first)
 
 **Steps:**
-1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_oauth_providers_table`
-2. Implement table schema:
-   ```sql
-   CREATE TABLE oauth_providers (
-       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-       name TEXT UNIQUE NOT NULL,
-       display_name TEXT NOT NULL,
-       client_id TEXT NOT NULL,
-       client_secret TEXT NOT NULL,
-       auth_url TEXT NOT NULL,
-       token_url TEXT NOT NULL,
-       user_info_url TEXT NOT NULL,
-       scopes TEXT[] NOT NULL,
-       is_enabled BOOLEAN DEFAULT false,
-       created_at TIMESTAMPTZ DEFAULT now(),
-       updated_at TIMESTAMPTZ DEFAULT now()
-   );
-   ```
-3. Create indexes:
-   ```sql
-   CREATE INDEX idx_oauth_providers_is_enabled ON oauth_providers(is_enabled);
-   ```
-4. Add updated_at trigger
-5. Create rollback migration
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_clients_table`
+2. Implement table with all columns per System Design
+3. Create foreign key to users(id) for created_by
+4. Create indexes on id and is_active
+5. Add updated_at trigger
+6. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] Migration file created and executable
-- [ ] All columns match System Design specification
-- [ ] Indexes created correctly
-- [ ] Trigger for updated_at column works
-- [ ] Rollback migration works correctly
-- [ ] Migration runs successfully on clean database
+- [ ] All columns match specification
+- [ ] Foreign key constraint works correctly
+- [ ] Default grant_types array includes 'authorization_code'
+- [ ] Indexes created
+- [ ] Cascade delete behavior not set (preserve audit trail)
+- [ ] Migration and rollback work
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
-- `YYYYMMDDHHMMSS_create_oauth_providers_table.down.sql`
+- `YYYYMMDDHHMMSS_create_clients_table.up.sql`
+- `YYYYMMDDHHMMSS_create_clients_table.down.sql`
 
 ### 2.2 Task 1.2: Update users Table Migration
+
+**NOTE:** This task should be completed BEFORE Task 1.1 since clients table depends on users table.
 
 **Priority:** High  
 **Estimated Time:** 2 hours  
@@ -102,32 +104,59 @@ This document provides a detailed, step-by-step execution plan for implementing 
 - `YYYYMMDDHHMMSS_add_is_admin_to_users.up.sql`
 - `YYYYMMDDHHMMSS_add_is_admin_to_users.down.sql`
 
-### 2.3 Task 1.3: Create clients Table Migration
+### 2.3 Task 1.3: Create oauth_providers Table Migration
 
 **Priority:** High  
-**Estimated Time:** 4 hours
+**Estimated Time:** 5 hours  
+**Dependencies:** Task 1.1 complete (clients table must exist first)
 
 **Steps:**
-1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_clients_table`
-2. Implement table with all columns per System Design
-3. Create foreign key to users(id) for created_by
-4. Create indexes on id and is_active
-5. Add updated_at trigger
-6. Create rollback migration
+1. Create migration file: `migrate create -ext sql -dir ./db/migrations create_oauth_providers_table`
+2. Implement table schema:
+   ```sql
+   CREATE TABLE oauth_providers (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+       name TEXT NOT NULL,
+       display_name TEXT NOT NULL,
+       provider_client_id TEXT NOT NULL,
+       provider_client_secret TEXT NOT NULL,
+       auth_url TEXT NOT NULL,
+       token_url TEXT NOT NULL,
+       user_info_url TEXT NOT NULL,
+       scopes TEXT[] NOT NULL,
+       is_enabled BOOLEAN DEFAULT false,
+       created_at TIMESTAMPTZ DEFAULT now(),
+       updated_at TIMESTAMPTZ DEFAULT now(),
+       UNIQUE(client_id, name)
+   );
+   ```
+3. Create indexes:
+   ```sql
+   CREATE INDEX idx_oauth_providers_client_id ON oauth_providers(client_id);
+   CREATE INDEX idx_oauth_providers_is_enabled ON oauth_providers(is_enabled);
+   CREATE INDEX idx_oauth_providers_client_enabled ON oauth_providers(client_id, is_enabled);
+   ```
+4. Add updated_at trigger
+5. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] All columns match specification
-- [ ] Foreign key constraint works correctly
-- [ ] Default grant_types array includes 'authorization_code'
-- [ ] Indexes created
-- [ ] Cascade delete behavior not set (preserve audit trail)
-- [ ] Migration and rollback work
+- [ ] Migration file created and executable
+- [ ] client_id foreign key with CASCADE delete configured
+- [ ] Unique constraint on (client_id, name) prevents duplicate provider names per client
+- [ ] Multiple clients can use same provider name (e.g., 'google')
+- [ ] All indexes created correctly
+- [ ] Trigger for updated_at column works
+- [ ] Rollback migration works correctly
+- [ ] Migration runs successfully after clients table exists
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_clients_table.up.sql`
-- `YYYYMMDDHHMMSS_create_clients_table.down.sql`
+- `YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
+- `YYYYMMDDHHMMSS_create_oauth_providers_table.down.sql`
 
 ### 2.4 Task 1.4: Create authorization_codes Table Migration
+
+**NOTE:** Provider referenced in authorization_codes is now client-scoped via the oauth_providers table.
 
 **Priority:** High  
 **Estimated Time:** 5 hours
@@ -176,43 +205,7 @@ This document provides a detailed, step-by-step execution plan for implementing 
 - `YYYYMMDDHHMMSS_create_access_tokens_table.up.sql`
 - `YYYYMMDDHHMMSS_create_access_tokens_table.down.sql`
 
-### 2.6 Task 1.6: Seed Initial Google Provider
-
-**Priority:** Medium  
-**Estimated Time:** 2 hours  
-**Dependencies:** Task 1.1 complete
-
-**Steps:**
-1. Create seed migration: `migrate create -ext sql -dir ./db/migrations seed_google_provider`
-2. Insert Google OAuth provider with placeholder credentials:
-   ```sql
-   INSERT INTO oauth_providers (name, display_name, client_id, client_secret, auth_url, token_url, user_info_url, scopes, is_enabled)
-   VALUES (
-       'google',
-       'Google',
-       'PLACEHOLDER_CLIENT_ID',
-       'PLACEHOLDER_CLIENT_SECRET',
-       'https://accounts.google.com/o/oauth2/v2/auth',
-       'https://oauth2.googleapis.com/token',
-       'https://www.googleapis.com/oauth2/v2/userinfo',
-       ARRAY['openid', 'email', 'profile'],
-       false
-   );
-   ```
-3. Add note in migration comments to configure via admin API
-4. Create rollback migration
-
-**Acceptance Criteria:**
-- [ ] Google provider seeded with correct URLs
-- [ ] is_enabled set to false (requires admin configuration)
-- [ ] Placeholder credentials clearly marked
-- [ ] Migration runs after oauth_providers table creation
-
-**Deliverables:**
-- `YYYYMMDDHHMMSS_seed_google_provider.up.sql`
-- `YYYYMMDDHHMMSS_seed_google_provider.down.sql`
-
-### 2.7 Task 1.7: Update Schema Dump
+### 2.6 Task 1.6: Update Schema Dump
 
 **Priority:** Low  
 **Estimated Time:** 1 hour  
@@ -236,14 +229,20 @@ This document provides a detailed, step-by-step execution plan for implementing 
 
 ### Phase 1 Completion Checklist
 
-- [ ] All 5 table migrations created and tested
+- [ ] Users table migration with is_admin column created
+- [ ] Clients table migration created and tested
+- [ ] OAuth providers table migration created with client_id FK
+- [ ] Authorization codes table migration created
+- [ ] Access tokens table migration created
 - [ ] All indexes created
-- [ ] All foreign keys configured correctly
+- [ ] All foreign keys configured correctly with proper cascade behavior
+- [ ] Unique constraint on (client_id, name) for oauth_providers works
 - [ ] Triggers for updated_at columns work
-- [ ] Google provider seeded
+- [ ] Optional development seed data created (if desired)
 - [ ] Schema dump updated
 - [ ] All migrations can be rolled back
 - [ ] Database documentation updated
+- [ ] Migration order verified: users -> clients -> oauth_providers -> codes/tokens
 
 ## 3. Phase 2: Repository Layer
 
@@ -265,32 +264,33 @@ This document provides a detailed, step-by-step execution plan for implementing 
 SELECT * FROM oauth_providers
 WHERE id = $1 LIMIT 1;
 
--- name: GetOAuthProviderByName :one
+-- name: GetOAuthProviderByClientAndName :one
 SELECT * FROM oauth_providers
-WHERE name = $1 LIMIT 1;
+WHERE client_id = $1 AND name = $2 LIMIT 1;
 
--- name: ListOAuthProviders :many
+-- name: ListOAuthProvidersByClient :many
 SELECT * FROM oauth_providers
+WHERE client_id = $1
 ORDER BY display_name;
 
--- name: ListEnabledOAuthProviders :many
+-- name: ListEnabledOAuthProvidersByClient :many
 SELECT * FROM oauth_providers
-WHERE is_enabled = true
+WHERE client_id = $1 AND is_enabled = true
 ORDER BY display_name;
 
 -- name: CreateOAuthProvider :one
 INSERT INTO oauth_providers (
-    name, display_name, client_id, client_secret,
+    client_id, name, display_name, provider_client_id, provider_client_secret,
     auth_url, token_url, user_info_url, scopes, is_enabled
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 ) RETURNING *;
 
 -- name: UpdateOAuthProvider :one
 UPDATE oauth_providers
 SET display_name = $2,
-    client_id = $3,
-    client_secret = $4,
+    provider_client_id = $3,
+    provider_client_secret = $4,
     auth_url = $5,
     token_url = $6,
     user_info_url = $7,
@@ -301,6 +301,10 @@ WHERE id = $1
 RETURNING *;
 
 -- name: DeleteOAuthProvider :exec
+DELETE FROM oauth_providers
+WHERE id = $1;
+
+-- name: DisableOAuthProvider :exec
 UPDATE oauth_providers
 SET is_enabled = false, updated_at = now()
 WHERE id = $1;
@@ -311,6 +315,8 @@ WHERE id = $1;
 
 **Acceptance Criteria:**
 - [ ] All CRUD operations implemented
+- [ ] Queries filtered by client_id where appropriate
+- [ ] GetOAuthProviderByClientAndName enforces client scope
 - [ ] Queries use proper parameter binding
 - [ ] sqlc generates code without errors
 - [ ] Generated methods have correct signatures
@@ -489,29 +495,33 @@ WHERE id = $1;
 1. Create `internal/service/provider/provider.go`
 2. Implement service struct with repository dependency
 3. Implement methods:
-   - `ListProviders()` - List all providers
-   - `ListEnabledProviders()` - Public endpoint data
-   - `GetProvider(id)` - Get provider details
-   - `GetProviderByName(name)` - Get by name
-   - `CreateProvider(dto)` - Create with secret encryption
-   - `UpdateProvider(id, dto)` - Update with secret re-encryption
-   - `EnableProvider(id)` - Enable provider
-   - `DisableProvider(id)` - Disable provider
-4. Implement encryption/decryption for client_secret using AES-256-GCM
+   - `ListProvidersByClient(clientID)` - List all providers for a client
+   - `ListEnabledProvidersByClient(clientID)` - Public endpoint data for client
+   - `GetProvider(id)` - Get provider details (validate client ownership)
+   - `GetProviderByClientAndName(clientID, name)` - Get by client and name
+   - `CreateProvider(clientID, dto, adminUserID)` - Create with secret encryption
+   - `UpdateProvider(id, dto, adminUserID)` - Update with secret re-encryption (validate ownership)
+   - `EnableProvider(id, adminUserID)` - Enable provider (validate ownership)
+   - `DisableProvider(id, adminUserID)` - Disable provider (validate ownership)
+   - `DeleteProvider(id, adminUserID)` - Delete provider (validate ownership)
+4. Implement encryption/decryption for provider_client_secret using AES-256-GCM
 5. Add input validation
+6. Add client ownership validation for all operations
 
 **Acceptance Criteria:**
 - [ ] All service methods implemented
-- [ ] Client secrets encrypted before storage
-- [ ] Client secrets decrypted when needed for OAuth flow
+- [ ] Provider client secrets encrypted before storage
+- [ ] Provider client secrets decrypted when needed for OAuth flow
 - [ ] Secrets never returned in API responses
+- [ ] Client ownership validated for all provider operations
 - [ ] Input validation for all fields
-- [ ] Error handling for duplicate names
+- [ ] Error handling for duplicate names within client scope
 - [ ] URL validation for OAuth endpoints
 
 **Deliverables:**
 - `internal/service/provider/provider.go`
 - `internal/service/provider/encryption.go`
+- `internal/service/provider/validation.go`
 
 ### 4.2 Task 3.2: Implement Client Management Service
 
@@ -553,25 +563,27 @@ WHERE id = $1;
 **Steps:**
 1. Create `internal/service/auth/authorization.go`
 2. Implement authorization initiation:
-   - `InitiateAuthorization(provider, clientID, redirectURI, state, scope)`
-   - Validate provider is enabled
+   - `InitiateAuthorization(clientID, providerName, redirectURI, state, scope)`
    - Validate client exists and is active
+   - Validate provider exists for client and is enabled
    - Validate redirect URI matches registered URIs
    - Generate OAuth provider authorization URL
-   - Store state in session
+   - Store state in session with client context
 3. Implement provider callback handling:
-   - `HandleProviderCallback(provider, code, state)`
+   - `HandleProviderCallback(clientID, providerName, code, state)`
    - Validate state matches session
+   - Get provider by client and name
    - Exchange provider code for ID token
    - Verify ID token signature
    - Extract user info
    - Create/update user in database
    - Generate authorization code
-   - Store code with provider_id
+   - Store code with provider_id and client_id
 4. Implement token exchange:
    - `ExchangeCodeForToken(code, clientID, clientSecret, redirectURI)`
    - Validate client credentials
    - Validate authorization code (not expired, not used, not revoked)
+   - Verify code belongs to client
    - Verify redirect URI matches
    - Mark code as used
    - Generate JWT access token
@@ -582,15 +594,16 @@ WHERE id = $1;
    - Mark token as revoked
 
 **Acceptance Criteria:**
-- [ ] Provider selection implemented
-- [ ] Provider enabled check enforced
 - [ ] Client validation works
+- [ ] Provider selection validates client ownership
+- [ ] Provider enabled check enforced within client scope
 - [ ] Redirect URI validation strict
 - [ ] State parameter CSRF protection works
 - [ ] ID token verification implemented
 - [ ] User creation/update logic works
 - [ ] Authorization codes expire in 5 minutes
 - [ ] Codes are single-use
+- [ ] Code-to-client binding verified
 - [ ] JWT tokens expire in 60 minutes
 - [ ] Token revocation immediate
 
@@ -696,28 +709,31 @@ WHERE id = $1;
 ### 5.1 Task 4.1: Implement OAuth Provider Management Endpoints
 
 **Priority:** High  
-**Estimated Time:** 8 hours
+**Estimated Time:** 10 hours
 
 **Steps:**
 1. Create `internal/transport/http/api/v1/handler/provider_handler.go`
-2. Implement handlers:
-   - `GET /api/v1/providers` - List all (admin only)
-   - `GET /api/v1/providers/:id` - Get details (admin only)
-   - `POST /api/v1/providers` - Create (admin only)
-   - `PATCH /api/v1/providers/:id` - Update (admin only)
-   - `DELETE /api/v1/providers/:id` - Disable (admin only)
+2. Implement handlers (nested under clients):
+   - `GET /api/v1/clients/:client_id/providers` - List all providers for client (admin only)
+   - `GET /api/v1/clients/:client_id/providers/:id` - Get details (admin only)
+   - `POST /api/v1/clients/:client_id/providers` - Create provider for client (admin only)
+   - `PATCH /api/v1/clients/:client_id/providers/:id` - Update (admin only)
+   - `DELETE /api/v1/clients/:client_id/providers/:id` - Delete (admin only)
 3. Create DTOs in `dto.go`
 4. Add admin middleware to routes
-5. Add request validation
-6. Add to router in `router.go`
+5. Add client ownership validation
+6. Add request validation
+7. Add to router in `router.go`
 
 **Acceptance Criteria:**
-- [ ] All endpoints implemented
+- [ ] All endpoints implemented under client scope
 - [ ] Admin middleware applied
+- [ ] Client ownership validated (provider belongs to client)
 - [ ] Request/response DTOs defined
 - [ ] Input validation works
 - [ ] Error responses follow OAuth 2.0 format
-- [ ] Secrets excluded from responses
+- [ ] Provider secrets excluded from responses
+- [ ] Routes properly nested: `/api/v1/clients/:client_id/providers/...`
 
 **Deliverables:**
 - `internal/transport/http/api/v1/handler/provider_handler.go`
@@ -727,55 +743,61 @@ WHERE id = $1;
 ### 5.2 Task 4.2: Implement Public Authentication Endpoints
 
 **Priority:** Critical  
-**Estimated Time:** 6 hours
+**Estimated Time:** 8 hours
 
 **Steps:**
 1. Update `internal/transport/http/api/v1/handler/auth_handler.go`
 2. Implement handlers:
-   - `GET /api/v1/auth/providers` - List enabled providers (public)
-   - `POST /api/v1/auth/token` - Token exchange (public)
+   - `GET /api/v1/clients/:client_id/auth/providers` - List enabled providers for client (public)
+   - `POST /api/v1/auth/token` - Token exchange (public, includes client_id in request)
    - `POST /api/v1/auth/logout` - Logout (authenticated)
 3. Create request/response DTOs
 4. Add token validation middleware for logout
 5. Add to router
 
 **Acceptance Criteria:**
-- [ ] Provider list returns only enabled providers
-- [ ] Provider list excludes sensitive data
-- [ ] Token endpoint validates all parameters
+- [ ] Provider list returns only enabled providers for specified client
+- [ ] Provider list excludes sensitive data (secrets)
+- [ ] Client_id validated in provider list endpoint
+- [ ] Token endpoint validates all parameters including client_id
 - [ ] Token endpoint returns OAuth 2.0 compliant response
 - [ ] Logout requires valid bearer token
+- [ ] Routes use client scoping where appropriate
 
 **Deliverables:**
 - Updated auth handler
-- DTOs for token exchange
+- DTOs for token exchange and provider listing
 
 ### 5.3 Task 4.3: Implement Web OAuth Flow Endpoints
 
 **Priority:** Critical  
-**Estimated Time:** 10 hours
+**Estimated Time:** 12 hours
 
 **Steps:**
 1. Update `internal/transport/http/web/handler/auth_handler.go`
 2. Implement handlers:
-   - `GET /web/auth/:provider/login` - Initiate OAuth (public)
-   - `GET /web/auth/:provider/callback` - Handle callback (public)
-3. Implement session management for state parameter
+   - `GET /web/auth/:client_id/:provider/login` - Initiate OAuth (public)
+   - `GET /web/auth/:client_id/:provider/callback` - Handle callback (public)
+3. Implement session management for state parameter with client context
 4. Implement redirect logic
 5. Add error handling with user-friendly messages
-6. Add to web router
+6. Add client and provider validation
+7. Add to web router
 
 **Acceptance Criteria:**
-- [ ] Provider parameter validated
-- [ ] State parameter stored in secure session cookie
+- [ ] Client_id parameter validated
+- [ ] Provider parameter validated for client
+- [ ] Provider belongs to client check enforced
+- [ ] State parameter stored in secure session cookie with client context
 - [ ] CSRF protection via state validation
 - [ ] Redirects work correctly
 - [ ] Error pages display helpful messages
 - [ ] Authorization code passed to client
+- [ ] Routes include both client_id and provider: `/web/auth/:client_id/:provider/...`
 
 **Deliverables:**
 - Updated web auth handler
-- Session middleware
+- Session middleware with client context support
 - Error page templates (if needed)
 
 ### 5.4 Task 4.4: Implement Client Management Endpoints
@@ -892,29 +914,37 @@ WHERE id = $1;
 ### 5.8 Task 4.8: Write API Integration Tests
 
 **Priority:** High  
-**Estimated Time:** 16 hours
+**Estimated Time:** 20 hours
 
 **Steps:**
 1. Set up integration test environment
 2. Write end-to-end tests for OAuth flow:
-   - Provider selection
-   - Authorization initiation
-   - Callback handling
-   - Token exchange
+   - Client and provider setup
+   - Provider selection (client-scoped)
+   - Authorization initiation with client context
+   - Callback handling with client validation
+   - Token exchange with client credentials
    - API access with token
    - Logout
 3. Write tests for admin endpoints:
-   - Provider management
    - Client management
+   - Provider management (nested under clients)
    - User management
    - Session management
-4. Test error conditions
-5. Test authentication/authorization
-6. Ensure >80% API coverage
+4. Test client-provider isolation:
+   - Verify providers are isolated per client
+   - Test cross-client provider access denial
+   - Verify client ownership validation
+5. Test error conditions
+6. Test authentication/authorization
+7. Ensure >80% API coverage
 
 **Acceptance Criteria:**
-- [ ] Complete OAuth flow tested
+- [ ] Complete OAuth flow tested with client context
 - [ ] All admin endpoints tested
+- [ ] Client-scoped provider endpoints tested
+- [ ] Provider isolation between clients verified
+- [ ] Client ownership validation tested
 - [ ] Authentication middleware tested
 - [ ] Authorization middleware tested
 - [ ] Error responses tested
@@ -923,6 +953,7 @@ WHERE id = $1;
 
 **Deliverables:**
 - Integration test suite
+- Client-provider isolation tests
 
 ### Phase 4 Completion Checklist
 
@@ -1189,24 +1220,28 @@ WHERE id = $1;
 ### 7.2 Task 6.2: Create Administrator Guide
 
 **Priority:** Medium  
-**Estimated Time:** 8 hours
+**Estimated Time:** 10 hours
 
 **Steps:**
 1. Create `docs/v0.2.0/AdministratorGuide.md`
 2. Document:
    - Initial setup and configuration
    - Creating first admin user
-   - Managing OAuth providers
    - Managing client applications
+   - Managing OAuth providers for clients
+   - Client-provider relationship and isolation
    - Managing users
    - Managing sessions
    - Security best practices
    - Troubleshooting
 3. Include examples and screenshots
+4. Explain client-scoped provider architecture
 
 **Acceptance Criteria:**
 - [ ] Setup instructions complete
 - [ ] All admin tasks documented
+- [ ] Client-provider relationship explained clearly
+- [ ] Provider isolation per client documented
 - [ ] Security guidelines included
 - [ ] Troubleshooting section helpful
 
@@ -1216,31 +1251,37 @@ WHERE id = $1;
 ### 7.3 Task 6.3: Create Client Integration Guide
 
 **Priority:** High  
-**Estimated Time:** 10 hours
+**Estimated Time:** 12 hours
 
 **Steps:**
 1. Create `docs/v0.2.0/ClientIntegrationGuide.md`
 2. Document:
    - Overview of OAuth 2.0 Authorization Code Grant
+   - Understanding client-scoped providers
    - Registering client application
-   - Discovering available providers
-   - Initiating authorization flow
+   - Configuring OAuth providers for your client
+   - Discovering available providers for your client
+   - Initiating authorization flow with client context
    - Handling callbacks
    - Exchanging code for token
    - Using access tokens
    - Error handling
    - Code examples in multiple languages
 3. Include complete example application
+4. Explain provider isolation between clients
 
 **Acceptance Criteria:**
 - [ ] Integration steps clear
+- [ ] Client-scoped provider model explained
+- [ ] Provider configuration documented
 - [ ] Code examples provided
 - [ ] Error handling explained
 - [ ] Example application works
+- [ ] Multi-provider setup example included
 
 **Deliverables:**
 - `docs/v0.2.0/ClientIntegrationGuide.md`
-- Example client application
+- Example client application with multiple providers
 
 ### 7.4 Task 6.4: Create Dockerfile
 
@@ -1404,6 +1445,7 @@ WHERE id = $1;
 1. Update `README.md` with:
    - Project overview
    - Features of v0.2.0
+   - Client-scoped provider architecture highlights
    - Quick start guide
    - Docker instructions
    - Development setup
@@ -1412,9 +1454,11 @@ WHERE id = $1;
    - License information
    - Links to documentation
 2. Add badges (build status, coverage, etc.)
+3. Explain benefits of client-scoped providers
 
 **Acceptance Criteria:**
 - [ ] README complete and accurate
+- [ ] Client-scoped provider model highlighted
 - [ ] Quick start works
 - [ ] Links valid
 - [ ] Badges display correctly
@@ -1460,8 +1504,10 @@ WHERE id = $1;
 | OAuth provider API changes | Medium | High | Version lock, monitoring, fallback |
 | Database migration failures | Low | Critical | Test migrations, backup before deploy |
 | Security vulnerabilities | Medium | Critical | Security audit, penetration testing |
+| Client-provider isolation breach | Low | Critical | Thorough testing, validation at all layers |
 | Performance bottlenecks | Medium | Medium | Load testing, optimization |
 | Third-party dependency issues | Medium | Medium | Vendor packages, lock files |
+| Provider configuration complexity | Medium | Medium | Clear documentation, admin UI validation |
 
 ### 9.2 Rollback Plan
 
@@ -1476,10 +1522,14 @@ WHERE id = $1;
 ### 10.1 Functional Criteria
 
 - [ ] All API endpoints functional per specification
-- [ ] OAuth 2.0 flow works with Google provider
-- [ ] Admin can manage providers, clients, users, sessions
+- [ ] OAuth 2.0 flow works with client-scoped providers
+- [ ] Multiple providers can be configured per client
+- [ ] Provider isolation between clients enforced
+- [ ] Admin can manage clients and their providers
+- [ ] Admin can manage users and sessions
 - [ ] Tokens issued and validated correctly
 - [ ] Session management works
+- [ ] Client ownership validation works
 
 ### 10.2 Non-Functional Criteria
 
