@@ -63,16 +63,16 @@ This architecture provides flexibility for SaaS scenarios where different client
 6. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] All columns match specification
-- [ ] Foreign key constraint works correctly
-- [ ] Default grant_types array includes 'authorization_code'
-- [ ] Indexes created
-- [ ] Cascade delete behavior not set (preserve audit trail)
-- [ ] Migration and rollback work
+- [x] All columns match specification
+- [x] Foreign key constraint works correctly
+- [x] Default grant_types array includes 'authorization_code'
+- [x] Indexes created
+- [x] Cascade delete behavior not set (preserve audit trail)
+- [x] Migration and rollback work
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_clients_table.up.sql`
-- `YYYYMMDDHHMMSS_create_clients_table.down.sql`
+- `20260213100111_create_clients_table.up.sql` ✓
+- `20260213100111_create_clients_table.down.sql` ✓
 
 ### 2.2 Task 1.2: Update users Table Migration
 
@@ -95,14 +95,14 @@ This architecture provides flexibility for SaaS scenarios where different client
 4. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] is_admin column added with correct default
-- [ ] Index created on is_admin column
-- [ ] Existing users have is_admin = false
-- [ ] Migration and rollback work correctly
+- [x] is_admin column added with correct default
+- [x] Index created on is_admin column
+- [x] Existing users have is_admin = false
+- [x] Migration and rollback work correctly
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_add_is_admin_to_users.up.sql`
-- `YYYYMMDDHHMMSS_add_is_admin_to_users.down.sql`
+- `20260213095938_add_is_admin_to_users.up.sql` ✓
+- `20260213095938_add_is_admin_to_users.down.sql` ✓
 
 ### 2.3 Task 1.3: Create oauth_providers Table Migration
 
@@ -229,8 +229,8 @@ This architecture provides flexibility for SaaS scenarios where different client
 
 ### Phase 1 Completion Checklist
 
-- [ ] Users table migration with is_admin column created
-- [ ] Clients table migration created and tested
+- [x] Users table migration with is_admin column created
+- [x] Clients table migration created and tested
 - [ ] OAuth providers table migration created with client_id FK
 - [ ] Authorization codes table migration created
 - [ ] Access tokens table migration created
@@ -242,7 +242,7 @@ This architecture provides flexibility for SaaS scenarios where different client
 - [ ] Schema dump updated
 - [ ] All migrations can be rolled back
 - [ ] Database documentation updated
-- [ ] Migration order verified: users -> clients -> oauth_providers -> codes/tokens
+- [x] Migration order verified: users -> clients -> oauth_providers -> codes/tokens
 
 ## 3. Phase 2: Repository Layer
 
