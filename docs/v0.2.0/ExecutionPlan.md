@@ -172,15 +172,15 @@ This architecture provides flexibility for SaaS scenarios where different client
 5. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] All columns including provider_id present
-- [ ] All three foreign keys with CASCADE delete
-- [ ] Unique constraint on code column
-- [ ] All indexes created (expires_at, user_id, client_id, provider_id)
-- [ ] Migration and rollback work
+- [x] All columns including provider_id present
+- [x] All three foreign keys with CASCADE delete
+- [x] Unique constraint on code column
+- [x] All indexes created (expires_at, user_id, client_id, provider_id)
+- [x] Migration and rollback work
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_authorization_codes_table.up.sql`
-- `YYYYMMDDHHMMSS_create_authorization_codes_table.down.sql`
+- `20260216155730_create_authorization_codes_table.up.sql` ✓
+- `20260216155730_create_authorization_codes_table.down.sql` ✓
 
 ### 2.5 Task 1.5: Create access_tokens Table Migration
 
@@ -232,7 +232,7 @@ This architecture provides flexibility for SaaS scenarios where different client
 - [x] Users table migration with is_admin column created
 - [x] Clients table migration created and tested
 - [x] OAuth providers table migration created with client_id FK
-- [ ] Authorization codes table migration created
+- [x] Authorization codes table migration created
 - [ ] Access tokens table migration created
 - [ ] All indexes created
 - [ ] All foreign keys configured correctly with proper cascade behavior
