@@ -141,18 +141,18 @@ This architecture provides flexibility for SaaS scenarios where different client
 5. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] Migration file created and executable
-- [ ] client_id foreign key with CASCADE delete configured
-- [ ] Unique constraint on (client_id, name) prevents duplicate provider names per client
-- [ ] Multiple clients can use same provider name (e.g., 'google')
-- [ ] All indexes created correctly
-- [ ] Trigger for updated_at column works
-- [ ] Rollback migration works correctly
-- [ ] Migration runs successfully after clients table exists
+- [x] Migration file created and executable
+- [x] client_id foreign key with CASCADE delete configured
+- [x] Unique constraint on (client_id, name) prevents duplicate provider names per client
+- [x] Multiple clients can use same provider name (e.g., 'google')
+- [x] All indexes created correctly
+- [x] Trigger for updated_at column works
+- [x] Rollback migration works correctly
+- [x] Migration runs successfully after clients table exists
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_oauth_providers_table.up.sql`
-- `YYYYMMDDHHMMSS_create_oauth_providers_table.down.sql`
+- `20260216155147_create_oauth_providers_table.up.sql` ✓
+- `20260216155147_create_oauth_providers_table.down.sql` ✓
 
 ### 2.4 Task 1.4: Create authorization_codes Table Migration
 
@@ -231,12 +231,12 @@ This architecture provides flexibility for SaaS scenarios where different client
 
 - [x] Users table migration with is_admin column created
 - [x] Clients table migration created and tested
-- [ ] OAuth providers table migration created with client_id FK
+- [x] OAuth providers table migration created with client_id FK
 - [ ] Authorization codes table migration created
 - [ ] Access tokens table migration created
 - [ ] All indexes created
 - [ ] All foreign keys configured correctly with proper cascade behavior
-- [ ] Unique constraint on (client_id, name) for oauth_providers works
+- [x] Unique constraint on (client_id, name) for oauth_providers works
 - [ ] Triggers for updated_at columns work
 - [ ] Optional development seed data created (if desired)
 - [ ] Schema dump updated
