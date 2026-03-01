@@ -240,8 +240,8 @@ This architecture provides flexibility for SaaS scenarios where different client
 - [x] Triggers for updated_at columns work
 - [ ] Optional development seed data created (if desired)
 - [x] Schema dump updated
-- [ ] All migrations can be rolled back
-- [ ] Database documentation updated
+- [x] All migrations can be rolled back
+- [x] Database documentation updated
 - [x] Migration order verified: users -> clients -> oauth_providers -> codes/tokens
 
 ## 3. Phase 2: Repository Layer
