@@ -219,13 +219,13 @@ This architecture provides flexibility for SaaS scenarios where different client
 5. Commit schema dump
 
 **Acceptance Criteria:**
-- [ ] Schema dump includes all new tables
-- [ ] All indexes and foreign keys present
-- [ ] Triggers included
-- [ ] Schema is properly formatted
+- [x] Schema dump includes all new tables
+- [x] All indexes and foreign keys present
+- [x] Triggers included
+- [x] Schema is properly formatted
 
 **Deliverables:**
-- Updated `db/schema/schema.sql`
+- Updated `db/schema/schema.sql` ✓
 
 ### Phase 1 Completion Checklist
 
@@ -237,9 +237,9 @@ This architecture provides flexibility for SaaS scenarios where different client
 - [x] All indexes created
 - [x] All foreign keys configured correctly with proper cascade behavior
 - [x] Unique constraint on (client_id, name) for oauth_providers works
-- [ ] Triggers for updated_at columns work
+- [x] Triggers for updated_at columns work
 - [ ] Optional development seed data created (if desired)
-- [ ] Schema dump updated
+- [x] Schema dump updated
 - [ ] All migrations can be rolled back
 - [ ] Database documentation updated
 - [x] Migration order verified: users -> clients -> oauth_providers -> codes/tokens
