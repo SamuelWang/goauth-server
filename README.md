@@ -40,8 +40,8 @@ A Golang service of the auth platform.
     Use `golang-migrate` to run the migrations:
 
     ```bash
-    chmod +x scripts/db/run_migrations.sh
-    ./scripts/db/run_migrations.sh
+    chmod +x db/scripts/run_migrations.sh
+    ./db/scripts/run_migrations.sh
     ```
 
 6. **Run the Application**
@@ -69,15 +69,15 @@ Follow the instructions below to create and apply new migrations:
 2. Apply migrations to the database:
 
     ```bash
-    chmod +x scripts/db/run_migrations.sh
-    ./scripts/db/run_migrations.sh [N]
+    chmod +x db/scripts/run_migrations.sh
+    ./db/scripts/run_migrations.sh [N]
     ```
 
 3. Dump the database schema:
 
     ```bash
-    chmod +x scripts/db/dump_schema.sh
-    ./scripts/db/dump_schema.sh
+    chmod +x db/scripts/dump_schema.sh
+    ./db/scripts/dump_schema.sh
     ```
 
 4. Write SQL queries in the appropriate files under `db/queries/`.
@@ -93,11 +93,11 @@ Follow the instructions below to create and apply new migrations:
 If you need to rollback migrations the repository provides a helper script. Usage:
 
 ```bash
-chmod +x scripts/db/rollback_migrations.sh
+chmod +x db/scripts/rollback_migrations.sh
 # rollback all migrations (default)
-./scripts/db/rollback_migrations.sh
+./db/scripts/rollback_migrations.sh
 # rollback N down migrations (e.g. 2)
-./scripts/db/rollback_migrations.sh 2
+./db/scripts/rollback_migrations.sh 2
 ```
 
 ## Development

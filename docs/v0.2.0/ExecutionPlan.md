@@ -213,7 +213,7 @@ This architecture provides flexibility for SaaS scenarios where different client
 
 **Steps:**
 1. Run all migrations on clean database
-2. Execute schema dump script: `./scripts/db/dump_schema.sh`
+2. Execute schema dump script: `./db/scripts/dump_schema.sh`
 3. Verify `db/schema/schema.sql` is updated
 4. Review schema for correctness
 5. Commit schema dump
@@ -1586,7 +1586,7 @@ See System Design Document Appendix B for full configuration reference.
 
 ```bash
 # Run migrations
-./scripts/db/run_migrations.sh
+./db/scripts/run_migrations.sh
 
 # Generate sqlc code
 sqlc generate
