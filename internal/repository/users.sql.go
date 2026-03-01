@@ -29,7 +29,7 @@ INSERT INTO
 VALUES
   ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type CreateUserParams struct {
@@ -71,13 +71,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -103,13 +104,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -135,13 +137,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByProviderID = `-- name: GetUserByProviderID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -173,6 +176,7 @@ func (q *Queries) GetUserByProviderID(ctx context.Context, arg GetUserByProvider
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -185,7 +189,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type UpdateLastLoginParams struct {
@@ -211,6 +215,7 @@ func (q *Queries) UpdateLastLogin(ctx context.Context, arg UpdateLastLoginParams
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -226,7 +231,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type UpdateUserParams struct {
@@ -262,6 +267,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }

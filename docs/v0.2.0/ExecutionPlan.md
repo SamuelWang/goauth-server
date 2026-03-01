@@ -314,16 +314,16 @@ WHERE id = $1;
 4. Verify generated code in `internal/repository/`
 
 **Acceptance Criteria:**
-- [ ] All CRUD operations implemented
-- [ ] Queries filtered by client_id where appropriate
-- [ ] GetOAuthProviderByClientAndName enforces client scope
-- [ ] Queries use proper parameter binding
-- [ ] sqlc generates code without errors
-- [ ] Generated methods have correct signatures
+- [x] All CRUD operations implemented
+- [x] Queries filtered by client_id where appropriate
+- [x] GetOAuthProviderByClientAndName enforces client scope
+- [x] Queries use proper parameter binding
+- [x] sqlc generates code without errors
+- [x] Generated methods have correct signatures
 
 **Deliverables:**
-- `db/queries/oauth_providers.sql`
-- Generated Go code in `internal/repository/`
+- `db/queries/oauth_providers.sql` ✓
+- Generated Go code in `internal/repository/` ✓
 
 ### 3.2 Task 2.2: Create clients.sql Queries
 
