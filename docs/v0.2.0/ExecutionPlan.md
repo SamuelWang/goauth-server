@@ -195,15 +195,15 @@ This architecture provides flexibility for SaaS scenarios where different client
 5. Create rollback migration
 
 **Acceptance Criteria:**
-- [ ] All columns match specification
-- [ ] token_hash has unique constraint
-- [ ] Foreign keys with CASCADE delete work
-- [ ] All indexes created
-- [ ] Migration and rollback work
+- [x] All columns match specification
+- [x] token_hash has unique constraint
+- [x] Foreign keys with CASCADE delete work
+- [x] All indexes created
+- [x] Migration and rollback work
 
 **Deliverables:**
-- `YYYYMMDDHHMMSS_create_access_tokens_table.up.sql`
-- `YYYYMMDDHHMMSS_create_access_tokens_table.down.sql`
+- `20260301120000_create_access_tokens_table.up.sql` ✓
+- `20260301120000_create_access_tokens_table.down.sql` ✓
 
 ### 2.6 Task 1.6: Update Schema Dump
 
@@ -233,9 +233,9 @@ This architecture provides flexibility for SaaS scenarios where different client
 - [x] Clients table migration created and tested
 - [x] OAuth providers table migration created with client_id FK
 - [x] Authorization codes table migration created
-- [ ] Access tokens table migration created
-- [ ] All indexes created
-- [ ] All foreign keys configured correctly with proper cascade behavior
+- [x] Access tokens table migration created
+- [x] All indexes created
+- [x] All foreign keys configured correctly with proper cascade behavior
 - [x] Unique constraint on (client_id, name) for oauth_providers works
 - [ ] Triggers for updated_at columns work
 - [ ] Optional development seed data created (if desired)
