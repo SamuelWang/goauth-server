@@ -342,15 +342,15 @@ WHERE id = $1;
 3. Run `sqlc generate`
 
 **Acceptance Criteria:**
-- [ ] All queries support required operations
-- [ ] Pagination implemented with LIMIT/OFFSET
-- [ ] Filters for is_active status
-- [ ] Soft delete sets is_active = false
-- [ ] sqlc generation successful
+- [x] All queries support required operations
+- [x] Pagination implemented with LIMIT/OFFSET
+- [x] Filters for is_active status
+- [x] Soft delete sets is_active = false
+- [x] sqlc generation successful
 
 **Deliverables:**
-- `db/queries/clients.sql`
-- Generated repository code
+- `db/queries/clients.sql` ✓
+- Generated repository code ✓
 
 ### 3.3 Task 2.3: Create authorization_codes.sql Queries
 
