@@ -400,15 +400,15 @@ WHERE id = $1;
 3. Run `sqlc generate`
 
 **Acceptance Criteria:**
-- [ ] token_hash used for lookups (not plain token)
-- [ ] Filters for client_id, user_id, is_revoked
-- [ ] Bulk revocation by client and user
-- [ ] Cleanup query for expired tokens
-- [ ] sqlc generation successful
+- [x] token_hash used for lookups (not plain token)
+- [x] Filters for client_id, user_id, is_revoked
+- [x] Bulk revocation by client and user
+- [x] Cleanup query for expired tokens
+- [x] sqlc generation successful
 
 **Deliverables:**
-- `db/queries/access_tokens.sql`
-- Generated repository code
+- `db/queries/access_tokens.sql` ✓
+- Generated repository code ✓
 
 ### 3.5 Task 2.5: Update users.sql Queries
 
