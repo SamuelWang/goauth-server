@@ -69,3 +69,47 @@ WHERE
   id = $1
 RETURNING
   *;
+
+-- name: ListUsers :many
+SELECT
+  *
+FROM
+  users
+WHERE
+  ($1::boolean IS NULL OR is_active = $1)
+  AND ($2::boolean IS NULL OR is_admin = $2)
+ORDER BY
+  created_at DESC
+LIMIT
+  $3
+OFFSET
+  $4;
+
+-- name: CountUsers :one
+SELECT
+  COUNT(*)
+FROM
+  users
+WHERE
+  ($1::boolean IS NULL OR is_active = $1)
+  AND ($2::boolean IS NULL OR is_admin = $2);
+
+-- name: UpdateUserActiveStatus :one
+UPDATE users
+SET
+  is_active = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: GetUsersByAdmin :many
+SELECT
+  *
+FROM
+  users
+WHERE
+  is_admin = $1
+ORDER BY
+  created_at DESC;

@@ -426,14 +426,14 @@ WHERE id = $1;
 4. Run `sqlc generate`
 
 **Acceptance Criteria:**
-- [ ] All existing queries include is_admin
-- [ ] New admin-related queries implemented
-- [ ] Pagination support added
-- [ ] sqlc generation successful
+- [x] All existing queries include is_admin
+- [x] New admin-related queries implemented
+- [x] Pagination support added
+- [x] sqlc generation successful
 
 **Deliverables:**
-- Updated `db/queries/users.sql`
-- Updated repository code
+- Updated `db/queries/users.sql` ✓
+- Updated repository code ✓
 
 ### 3.6 Task 2.6: Write Repository Unit Tests
 
@@ -472,9 +472,9 @@ WHERE id = $1;
 
 ### Phase 2 Completion Checklist
 
-- [ ] All SQL query files created
-- [ ] sqlc code generation successful
-- [ ] All repository methods available
+- [x] All SQL query files created
+- [x] sqlc code generation successful
+- [x] All repository methods available
 - [ ] Unit tests written for all repositories
 - [ ] Tests pass with >80% coverage
 - [ ] Code review completed
