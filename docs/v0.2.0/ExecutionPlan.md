@@ -371,15 +371,15 @@ WHERE id = $1;
 4. Run `sqlc generate`
 
 **Acceptance Criteria:**
-- [ ] All queries include provider_id column
-- [ ] Filters for client_id, user_id, is_revoked
-- [ ] Mark as used updates used_at timestamp
-- [ ] Cleanup query for expired codes
-- [ ] sqlc generation successful
+- [x] All queries include provider_id column
+- [x] Filters for client_id, user_id, is_revoked
+- [x] Mark as used updates used_at timestamp
+- [x] Cleanup query for expired codes
+- [x] sqlc generation successful
 
 **Deliverables:**
-- `db/queries/authorization_codes.sql`
-- Generated repository code
+- `db/queries/authorization_codes.sql` ✓
+- Generated repository code ✓
 
 ### 3.4 Task 2.4: Create access_tokens.sql Queries
 
