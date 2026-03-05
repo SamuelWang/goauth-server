@@ -63,6 +63,11 @@ func (j *AccessTokenManager) GenerateToken(userID, email string) (string, error)
 	return token.SignedString(j.privateKey)
 }
 
+// Expiry returns the configured token lifetime duration.
+func (j *AccessTokenManager) Expiry() time.Duration {
+	return j.expiry
+}
+
 func (j *AccessTokenManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// Verify the signing method

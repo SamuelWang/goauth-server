@@ -2,12 +2,15 @@ package authserver
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 
 	"github.com/SamuelWang/goauth-server/internal/auth"
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	providerservice "github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/ops"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/web"
@@ -30,8 +33,18 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 		return nil, err
 	}
 
+	// Initialize provider service (requires a 32-byte AES-256 key, hex-encoded in config).
+	encKeyBytes, err := hex.DecodeString(cfg.Security.ProviderEncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("decoding provider encryption key: %w", err)
+	}
+	providerSvc, err := providerservice.New(repo, encKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("initializing provider service: %w", err)
+	}
+
 	// Initialize services
-	authService := authservice.New(repo, cfg, accessTokenManager)
+	authService := authservice.New(repo, cfg, accessTokenManager, providerSvc)
 
 	// Set Gin mode
 	if cfg.Server.Env == "production" {

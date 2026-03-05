@@ -159,6 +159,33 @@ func (s *Service) GetProviderWithSecret(ctx context.Context, id uuid.UUID) (*OAu
 	}, nil
 }
 
+// GetProviderWithSecretByClientAndName returns a provider by client ID and name
+// with its decrypted credentials. For internal OAuth flow use only — never
+// include in API responses.
+func (s *Service) GetProviderWithSecretByClientAndName(ctx context.Context, clientID uuid.UUID, name string) (*OAuthProviderWithSecret, error) {
+	row, err := s.repo.GetOAuthProviderByClientAndName(ctx, repository.GetOAuthProviderByClientAndNameParams{
+		ClientID: clientID,
+		Name:     name,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProviderNotFound
+		}
+		return nil, fmt.Errorf("getting provider by client and name: %w", err)
+	}
+
+	decryptedSecret, err := decrypt(s.encryptionKey, row.ProviderClientSecret)
+	if err != nil {
+		return nil, fmt.Errorf("decrypting provider secret: %w", err)
+	}
+
+	return &OAuthProviderWithSecret{
+		OAuthProvider:        toOAuthProvider(row),
+		ProviderClientID:     row.ProviderClientID,
+		ProviderClientSecret: decryptedSecret,
+	}, nil
+}
+
 // CreateProvider creates a new OAuth provider for a client, encrypting the client secret at rest.
 func (s *Service) CreateProvider(ctx context.Context, clientID uuid.UUID, dto CreateProviderDTO) (*OAuthProvider, error) {
 	if err := validateCreateDTO(dto); err != nil {

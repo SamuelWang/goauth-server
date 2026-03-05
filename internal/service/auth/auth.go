@@ -8,6 +8,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	providerservice "github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/google/uuid"
 )
 
@@ -15,13 +16,15 @@ type AuthService struct {
 	cfg                *config.Config
 	repo               *repository.Queries
 	accessTokenManager *auth.AccessTokenManager
+	providerSvc        *providerservice.Service
 }
 
-func New(repo *repository.Queries, cfg *config.Config, accessTokenManager *auth.AccessTokenManager) *AuthService {
+func New(repo *repository.Queries, cfg *config.Config, accessTokenManager *auth.AccessTokenManager, providerSvc *providerservice.Service) *AuthService {
 	svc := &AuthService{
 		cfg:                cfg,
 		repo:               repo,
 		accessTokenManager: accessTokenManager,
+		providerSvc:        providerSvc,
 	}
 
 	return svc
