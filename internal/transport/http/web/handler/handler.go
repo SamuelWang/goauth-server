@@ -6,10 +6,10 @@ import (
 )
 
 type WebHandler struct {
-	authService *auth.AuthService
+	authService *auth.Service
 }
 
-func New(authService *auth.AuthService) *WebHandler {
+func New(authService *auth.Service) *WebHandler {
 	return &WebHandler{
 		authService: authService,
 	}

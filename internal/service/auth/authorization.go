@@ -9,7 +9,7 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
-	providerservice "github.com/SamuelWang/goauth-server/internal/service/provider"
+	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -49,7 +49,7 @@ type TokenResponse struct {
 // to after the user authenticates (e.g. /web/auth/:clientID/:provider/callback).
 // clientRedirectURI is the client application's final redirect URI; it is
 // validated against the client's registered redirect_uris.
-func (s *AuthService) InitiateAuthorization(
+func (s *Service) InitiateAuthorization(
 	ctx context.Context,
 	clientID uuid.UUID,
 	providerName string,
@@ -78,8 +78,8 @@ func (s *AuthService) InitiateAuthorization(
 	// 3. Validate provider (with secret needed to build the config).
 	p, err := s.providerSvc.GetProviderWithSecretByClientAndName(ctx, clientID, providerName)
 	if err != nil {
-		if errors.Is(err, providerservice.ErrProviderNotFound) {
-			return "", providerservice.ErrProviderNotFound
+		if errors.Is(err, provider.ErrProviderNotFound) {
+			return "", provider.ErrProviderNotFound
 		}
 		return "", fmt.Errorf("getting provider: %w", err)
 	}
@@ -105,7 +105,7 @@ func (s *AuthService) InitiateAuthorization(
 // callbackURL must be the same URL used in InitiateAuthorization so that the
 // provider accepts the code exchange.
 // clientRedirectURI is stored in the authorization code for later validation.
-func (s *AuthService) HandleProviderCallback(
+func (s *Service) HandleProviderCallback(
 	ctx context.Context,
 	clientID uuid.UUID,
 	providerName string,
@@ -177,7 +177,7 @@ func (s *AuthService) HandleProviderCallback(
 // ExchangeCodeForToken validates the authorization code and client credentials,
 // marks the code as used, generates a JWT access token, stores its hash in the
 // database for revocation support, and returns a TokenResponse.
-func (s *AuthService) ExchangeCodeForToken(
+func (s *Service) ExchangeCodeForToken(
 	ctx context.Context,
 	code string,
 	clientID uuid.UUID,
@@ -266,7 +266,7 @@ func (s *AuthService) ExchangeCodeForToken(
 
 // RevokeToken immediately revokes the access token identified by its SHA-256
 // hash.  Returns ErrTokenNotFound if no matching token exists.
-func (s *AuthService) RevokeToken(ctx context.Context, tokenHash string) error {
+func (s *Service) RevokeToken(ctx context.Context, tokenHash string) error {
 	token, err := s.repo.GetAccessToken(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -282,7 +282,7 @@ func (s *AuthService) RevokeToken(ctx context.Context, tokenHash string) error {
 
 // upsertUser looks up a user by their OAuth provider ID. If the user exists,
 // it updates the last-login timestamp; otherwise it creates a new account.
-func (s *AuthService) upsertUser(ctx context.Context, providerName string, info *ProviderUserInfo) (repository.User, error) {
+func (s *Service) upsertUser(ctx context.Context, providerName string, info *ProviderUserInfo) (repository.User, error) {
 	user, err := s.repo.GetUserByProviderID(ctx, repository.GetUserByProviderIDParams{
 		Provider:   util.StrPtr(providerName),
 		ProviderID: util.StrPtr(info.Sub),
@@ -327,7 +327,7 @@ func (s *AuthService) upsertUser(ctx context.Context, providerName string, info 
 }
 
 // buildOAuthConfig constructs an oauth2.Config from a provider row.
-func buildOAuthConfig(p *providerservice.OAuthProviderWithSecret, callbackURL string) *oauth2.Config {
+func buildOAuthConfig(p *provider.OAuthProviderWithSecret, callbackURL string) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     p.ProviderClientID,
 		ClientSecret: p.ProviderClientSecret,

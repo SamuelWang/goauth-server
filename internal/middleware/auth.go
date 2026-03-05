@@ -4,12 +4,12 @@ import (
 	"log"
 	"net/http"
 
-	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware validates access token and sets user context
-func AuthMiddleware(authService *authservice.AuthService) gin.HandlerFunc {
+func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get token from cookie
 		token, err := c.Cookie("access_token")

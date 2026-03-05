@@ -33,7 +33,7 @@ type IDTokenClaims struct {
 	Picture       string `json:"picture"`
 }
 
-func (s *AuthService) GetGoogleLoginURL(state string) (string, error) {
+func (s *Service) GetGoogleLoginURL(state string) (string, error) {
 	config := getGoogleOAuthConfig(s.cfg)
 	if config == nil {
 		return "", fmt.Errorf("Google OAuth is not enabled")
@@ -42,7 +42,7 @@ func (s *AuthService) GetGoogleLoginURL(state string) (string, error) {
 	return config.AuthCodeURL(state, oauth2.AccessTypeOffline), nil
 }
 
-func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (string, error) {
+func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (string, error) {
 	config := getGoogleOAuthConfig(s.cfg)
 	if config == nil {
 		return "", fmt.Errorf("Google OAuth is not enabled")

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -86,7 +86,7 @@ func TestAuthMiddleware_MissingToken(t *testing.T) {
 	router := setupTestRouter()
 
 	// Create a minimal auth service (we won't use it since there's no token)
-	authSvc := &authservice.AuthService{}
+	authSvc := &auth.Service{}
 
 	var handlerCalled bool
 	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
@@ -110,7 +110,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	router := setupTestRouter()
 
 	var handlerCalled bool
-	authSvc := &authservice.AuthService{}
+	authSvc := &auth.Service{}
 
 	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
 		handlerCalled = true
@@ -159,7 +159,7 @@ func TestAuthMiddleware_AbortOnUnauthorized(t *testing.T) {
 	router := setupTestRouter()
 
 	var nextHandlerCalled bool
-	authSvc := &authservice.AuthService{}
+	authSvc := &auth.Service{}
 
 	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
 		nextHandlerCalled = true
@@ -208,7 +208,7 @@ func TestAuthMiddleware_TokenValidationError(t *testing.T) {
 			// In a real scenario with dependency injection, we would mock the service
 			var handlerCalled bool
 
-			authSvc := &authservice.AuthService{}
+			authSvc := &auth.Service{}
 			router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
 				handlerCalled = true
 				c.JSON(http.StatusOK, gin.H{"status": "ok"})
