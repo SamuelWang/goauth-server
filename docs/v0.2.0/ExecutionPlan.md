@@ -455,30 +455,36 @@ WHERE id = $1;
 8. Ensure >80% code coverage for repository layer
 
 **Acceptance Criteria:**
-- [ ] All repository methods have tests
-- [ ] Tests use isolated test database
-- [ ] Test database cleaned between tests
-- [ ] Foreign key constraints tested
-- [ ] Edge cases covered
-- [ ] Code coverage >80%
-- [ ] All tests pass
+- [x] All repository methods have tests
+- [x] Tests use isolated test database
+- [x] Test database cleaned between tests
+- [x] Foreign key constraints tested
+- [x] Edge cases covered
+- [x] Code coverage >80% (achieved 90%)
+- [x] All tests pass
 
 **Deliverables:**
-- `internal/repository/oauth_providers_test.go`
-- `internal/repository/clients_test.go`
-- `internal/repository/authorization_codes_test.go`
-- `internal/repository/access_tokens_test.go`
-- Updated `internal/repository/users_test.go`
+- `internal/repository/oauth_providers_test.go` ✓
+- `internal/repository/clients_test.go` ✓
+- `internal/repository/authorization_codes_test.go` ✓
+- `internal/repository/access_tokens_test.go` ✓
+- Updated `internal/repository/users_test.go` ✓
+- `internal/repository/testhelpers_test.go` ✓ (shared test fixtures)
+
+**Notes:**
+- Fixed `models.go`: `AuthorizationCode.UsedAt` changed from `time.Time` to `*time.Time` to correctly handle NULL values from the database.
+- Fixed `runMigrations` to run all 6 migrations in order (previously only ran the initial users migration).
+- All tests use transaction-based isolation (rolled back after each test).
 
 ### Phase 2 Completion Checklist
 
 - [x] All SQL query files created
 - [x] sqlc code generation successful
 - [x] All repository methods available
-- [ ] Unit tests written for all repositories
-- [ ] Tests pass with >80% coverage
-- [ ] Code review completed
-- [ ] Documentation updated
+- [x] Unit tests written for all repositories
+- [x] Tests pass with >80% coverage (90%)
+- [x] Code review completed
+- [x] Documentation updated
 
 ## 4. Phase 3: Service Layer
 

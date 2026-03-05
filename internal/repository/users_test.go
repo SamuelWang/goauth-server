@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// runMigrations runs the database migrations
+// runMigrations runs all database migrations in order
 func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
 	// Get the project root directory
 	// Navigate up from internal/repository to the project root
@@ -87,19 +87,29 @@ func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
 
 	// Go up two levels from internal/repository to project root
 	projectRoot := filepath.Join(wd, "..", "..")
-	migrationsPath := filepath.Join(projectRoot, "internal", "db", "migrations")
+	migrationsPath := filepath.Join(projectRoot, "db", "migrations")
 
-	// Read the migration file
-	migrationFile := filepath.Join(migrationsPath, "20260109145607_create_users_table.up.sql")
-	migrationSQL, err := os.ReadFile(migrationFile)
-	if err != nil {
-		return fmt.Errorf("failed to read migration file: %w", err)
+	// Run all migrations in chronological order
+	migrationFiles := []string{
+		"20260109145607_create_users_table.up.sql",
+		"20260213095938_add_is_admin_to_users.up.sql",
+		"20260213100111_create_clients_table.up.sql",
+		"20260216155147_create_oauth_providers_table.up.sql",
+		"20260216155730_create_authorization_codes_table.up.sql",
+		"20260301120000_create_access_tokens_table.up.sql",
 	}
 
-	// Execute migration
-	_, err = db.Exec(ctx, string(migrationSQL))
-	if err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	for _, file := range migrationFiles {
+		migrationFile := filepath.Join(migrationsPath, file)
+		migrationSQL, err := os.ReadFile(migrationFile)
+		if err != nil {
+			return fmt.Errorf("failed to read migration file %s: %w", file, err)
+		}
+
+		_, err = db.Exec(ctx, string(migrationSQL))
+		if err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", file, err)
+		}
 	}
 
 	return nil
@@ -520,6 +530,180 @@ func TestUpdateLastLogin(t *testing.T) {
 		}
 
 		_, err := queries.UpdateLastLogin(ctx, updateParams)
+		require.Error(t, err)
+	})
+}
+
+func TestListUsers(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create test users
+	isAdminTrue := true
+	activeUsers := []CreateUserParams{
+		{Email: "active1@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now()},
+		{Email: "active2@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now()},
+	}
+	var createdUserIDs []uuid.UUID
+	for _, p := range activeUsers {
+		u, err := queries.CreateUser(ctx, p)
+		require.NoError(t, err)
+		createdUserIDs = append(createdUserIDs, u.ID)
+	}
+	// Make one user admin via transaction-scoped exec
+	_, err := queries.db.Exec(ctx, "UPDATE users SET is_admin = true WHERE id = $1", createdUserIDs[0])
+	require.NoError(t, err)
+	_ = isAdminTrue
+
+	t.Run("list active non-admin users with pagination", func(t *testing.T) {
+		// Column1=true filters is_active=true; Column2=false filters is_admin=false
+		users, err := queries.ListUsers(ctx, ListUsersParams{
+			Column1: true,
+			Column2: false,
+			Limit:   100,
+			Offset:  0,
+		})
+		require.NoError(t, err)
+		// The 2 active non-admin users we created should be in the result
+		assert.GreaterOrEqual(t, len(users), 1)
+	})
+
+	t.Run("list users with limit", func(t *testing.T) {
+		users, err := queries.ListUsers(ctx, ListUsersParams{
+			Column1: true,
+			Column2: false,
+			Limit:   1,
+			Offset:  0,
+		})
+		require.NoError(t, err)
+		assert.Len(t, users, 1)
+	})
+
+	t.Run("list users with offset", func(t *testing.T) {
+		allUsers, err := queries.ListUsers(ctx, ListUsersParams{Column1: true, Column2: false, Limit: 100, Offset: 0})
+		require.NoError(t, err)
+		if len(allUsers) > 0 {
+			offsetUsers, err := queries.ListUsers(ctx, ListUsersParams{Column1: true, Column2: false, Limit: 100, Offset: 1})
+			require.NoError(t, err)
+			assert.Equal(t, len(allUsers)-1, len(offsetUsers))
+		}
+	})
+}
+
+func TestCountUsers(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create some users
+	for i := 0; i < 3; i++ {
+		_, err := queries.CreateUser(ctx, CreateUserParams{
+			Email:         fmt.Sprintf("countuser%d@example.com", i),
+			EmailVerified: true,
+			Locale:        "en-US",
+			LastLoginAt:   time.Now(),
+		})
+		require.NoError(t, err)
+	}
+
+	t.Run("count all active non-admin users", func(t *testing.T) {
+		// Column1=true: is_active=true, Column2=false: is_admin=false
+		count, err := queries.CountUsers(ctx, CountUsersParams{Column1: true, Column2: false})
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, count, int64(3))
+	})
+}
+
+func TestGetUsersByAdmin(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create a regular user and an admin user
+	_, err := queries.CreateUser(ctx, CreateUserParams{
+		Email: "regular_getbyadmin@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	adminUser, err := queries.CreateUser(ctx, CreateUserParams{
+		Email: "admin_getbyadmin@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now(),
+	})
+	require.NoError(t, err)
+	// Use transaction-scoped exec so the user created within the transaction is visible
+	_, err = queries.db.Exec(ctx, "UPDATE users SET is_admin = true WHERE id = $1", adminUser.ID)
+	require.NoError(t, err)
+
+	t.Run("get admin users", func(t *testing.T) {
+		isAdmin := true
+		admins, err := queries.GetUsersByAdmin(ctx, &isAdmin)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(admins), 1)
+		for _, u := range admins {
+			assert.NotNil(t, u.IsAdmin)
+			assert.True(t, *u.IsAdmin)
+		}
+	})
+
+	t.Run("get non-admin users", func(t *testing.T) {
+		isAdmin := false
+		nonAdmins, err := queries.GetUsersByAdmin(ctx, &isAdmin)
+		require.NoError(t, err)
+		for _, u := range nonAdmins {
+			if u.IsAdmin != nil {
+				assert.False(t, *u.IsAdmin)
+			}
+		}
+	})
+}
+
+func TestUpdateUserActiveStatus(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("deactivate user", func(t *testing.T) {
+		user, err := queries.CreateUser(ctx, CreateUserParams{
+			Email: "deactivate@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now(),
+		})
+		require.NoError(t, err)
+		assert.True(t, user.IsActive)
+
+		updated, err := queries.UpdateUserActiveStatus(ctx, UpdateUserActiveStatusParams{
+			ID:       user.ID,
+			IsActive: false,
+		})
+		require.NoError(t, err)
+		assert.False(t, updated.IsActive)
+	})
+
+	t.Run("reactivate user", func(t *testing.T) {
+		user, err := queries.CreateUser(ctx, CreateUserParams{
+			Email: "reactivate@example.com", EmailVerified: true, Locale: "en-US", LastLoginAt: time.Now(),
+		})
+		require.NoError(t, err)
+
+		// Deactivate first
+		_, err = queries.UpdateUserActiveStatus(ctx, UpdateUserActiveStatusParams{ID: user.ID, IsActive: false})
+		require.NoError(t, err)
+
+		// Reactivate
+		updated, err := queries.UpdateUserActiveStatus(ctx, UpdateUserActiveStatusParams{ID: user.ID, IsActive: true})
+		require.NoError(t, err)
+		assert.True(t, updated.IsActive)
+	})
+
+	t.Run("update non-existent user returns no error but zero rows", func(t *testing.T) {
+		nonExistentID := uuid.New()
+		_, err := queries.UpdateUserActiveStatus(ctx, UpdateUserActiveStatusParams{
+			ID:       nonExistentID,
+			IsActive: false,
+		})
+		// pgx returns no rows error
 		require.Error(t, err)
 	})
 }

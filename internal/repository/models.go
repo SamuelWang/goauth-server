@@ -34,7 +34,7 @@ type AuthorizationCode struct {
 	CodeChallenge       *string
 	CodeChallengeMethod *string
 	ExpiresAt           time.Time
-	UsedAt              time.Time
+	UsedAt              *time.Time
 	IsRevoked           *bool
 	CreatedAt           time.Time
 }
