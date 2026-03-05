@@ -549,17 +549,23 @@ WHERE id = $1;
 6. Implement authorization check (admin only)
 
 **Acceptance Criteria:**
-- [ ] Client secrets generated cryptographically secure
-- [ ] Secrets hashed with bcrypt before storage
-- [ ] Plain secret only returned once at creation/regeneration
-- [ ] Redirect URIs validated (HTTPS in production)
-- [ ] Admin authorization checked
-- [ ] Pagination implemented
-- [ ] Soft delete sets is_active = false
+- [x] Client secrets generated cryptographically secure
+- [x] Secrets hashed with bcrypt before storage
+- [x] Plain secret only returned once at creation/regeneration
+- [x] Redirect URIs validated (HTTPS in production)
+- [x] Admin authorization checked
+- [x] Pagination implemented
+- [x] Soft delete sets is_active = false
 
 **Deliverables:**
-- `internal/service/client/client.go`
-- `internal/service/client/validation.go`
+- `internal/service/client/client.go` ✓
+- `internal/service/client/validation.go` ✓
+
+**Notes:**
+- `ListClients` defaults to active clients when `IsActive` filter is nil, consistent with the underlying repository's boolean parameter for `is_active`.
+- `CreateClientDTO.IsActive` allows creating clients in an inactive state (useful for staged rollouts).
+- Client secrets are 32 random bytes encoded as base64url (43 characters); hashed with bcrypt cost 12 before storage.
+- HTTPS enforcement on redirect URIs is gated on `env == "production"`; loopback addresses (localhost, 127.0.0.1, ::1) are always permitted over HTTP.
 
 ### 4.3 Task 3.3: Implement Authorization Code Flow Service
 
