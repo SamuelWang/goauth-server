@@ -681,13 +681,19 @@ WHERE id = $1;
 3. Add admin authorization checks
 
 **Acceptance Criteria:**
-- [ ] Pagination works
-- [ ] Status update sets is_active
-- [ ] Admin check used by middleware
-- [ ] Filters work correctly
+- [x] Pagination works
+- [x] Status update sets is_active
+- [x] Admin check used by middleware
+- [x] Filters work correctly
 
 **Deliverables:**
-- `internal/service/user/user.go`
+- `internal/service/user/user.go` ✓
+
+**Notes:**
+- `ListUsersParams` uses `*bool` pointers for `IsActive` and `IsAdmin` filters; nil values fall back to sensible defaults (`IsActive` nil → true, `IsAdmin` nil → false) because the underlying repository query (`ListUsers`) always applies both filters as non-nullable booleans.
+- `IsAdmin(userID)` fetches the user by ID and dereferences the nullable `*bool` field, returning `false` for NULL values in the database.
+- `UpdateUserStatus` returns the updated `User` so callers can confirm the new state without a separate read.
+- Service-level `User` model omits OAuth provider fields (`Provider`, `ProviderID`, `ProviderData`) to avoid leaking internal OAuth implementation details in API responses.
 
 ### 4.6 Task 3.6: Write Service Layer Unit Tests
 
@@ -723,7 +729,7 @@ WHERE id = $1;
 - [x] Client management service implemented (Task 3.2) ✓
 - [x] Authorization Code Flow service implemented (Task 3.3) ✓
 - [x] Session management service implemented (Task 3.4) ✓
-- [ ] User management service implemented (Task 3.5)
+- [x] User management service implemented (Task 3.5) ✓
 - [ ] All services implemented
 - [ ] Business logic complete
 - [ ] Authorization checks in place

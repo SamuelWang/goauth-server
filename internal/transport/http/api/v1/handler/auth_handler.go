@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // Logout invalidates the user's session
@@ -34,7 +35,14 @@ func (h *ApiV1Handler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.GetUserByID(c.Request.Context(), userID)
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		log.Printf("Invalid user ID format: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	user, err := h.userService.GetUser(c.Request.Context(), userUUID)
 	if err != nil {
 		log.Printf("Failed to get user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})

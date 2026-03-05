@@ -3,13 +3,14 @@ package v1
 import (
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api/v1/handler"
 
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, authService *authservice.AuthService) {
-	authHandler := handler.New(authService)
+func RegisterRoutes(r *gin.RouterGroup, authService *authservice.AuthService, userService *user.Service) {
+	authHandler := handler.New(userService)
 
 	// Auth routes
 	authGroup := r.Group("/auth")
