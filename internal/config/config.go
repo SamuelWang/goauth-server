@@ -11,6 +11,7 @@ type Config struct {
 	Database    DatabaseConfig
 	OAuth       OAuthConfig
 	AccessToken AccessTokenConfig
+	Security    SecurityConfig
 }
 
 type AppConfig struct {
@@ -51,6 +52,12 @@ type AccessTokenConfig struct {
 	Expiry     int // in minutes
 }
 
+type SecurityConfig struct {
+	// ProviderEncryptionKey is a hex-encoded 32-byte key used for AES-256-GCM
+	// encryption of OAuth provider client secrets at rest.
+	ProviderEncryptionKey string
+}
+
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
@@ -87,6 +94,9 @@ func Load() (*Config, error) {
 			PrivateKey: getEnv("ACCESS_TOKEN_PRIVATE_KEY", ""),
 			PublicKey:  getEnv("ACCESS_TOKEN_PUBLIC_KEY", ""),
 			Expiry:     getEnvAsInt("ACCESS_TOKEN_EXPIRY_MINUTES", 60),
+		},
+		Security: SecurityConfig{
+			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
 		},
 	}
 

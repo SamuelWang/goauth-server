@@ -515,19 +515,19 @@ WHERE id = $1;
 6. Add client ownership validation for all operations
 
 **Acceptance Criteria:**
-- [ ] All service methods implemented
-- [ ] Provider client secrets encrypted before storage
-- [ ] Provider client secrets decrypted when needed for OAuth flow
-- [ ] Secrets never returned in API responses
-- [ ] Client ownership validated for all provider operations
-- [ ] Input validation for all fields
-- [ ] Error handling for duplicate names within client scope
-- [ ] URL validation for OAuth endpoints
+- [x] All service methods implemented
+- [x] Provider client secrets encrypted before storage
+- [x] Provider client secrets decrypted when needed for OAuth flow
+- [x] Secrets never returned in API responses
+- [x] Client ownership validated for all provider operations
+- [x] Input validation for all fields
+- [x] Error handling for duplicate names within client scope
+- [x] URL validation for OAuth endpoints
 
 **Deliverables:**
-- `internal/service/provider/provider.go`
-- `internal/service/provider/encryption.go`
-- `internal/service/provider/validation.go`
+- `internal/service/provider/provider.go` ✓
+- `internal/service/provider/encryption.go` ✓
+- `internal/service/provider/validation.go` ✓
 
 ### 4.2 Task 3.2: Implement Client Management Service
 
