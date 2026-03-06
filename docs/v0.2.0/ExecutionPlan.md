@@ -771,19 +771,25 @@ WHERE id = $1;
 7. Add to router in `router.go`
 
 **Acceptance Criteria:**
-- [ ] All endpoints implemented under client scope
-- [ ] Admin middleware applied
-- [ ] Client ownership validated (provider belongs to client)
-- [ ] Request/response DTOs defined
-- [ ] Input validation works
-- [ ] Error responses follow OAuth 2.0 format
-- [ ] Provider secrets excluded from responses
-- [ ] Routes properly nested: `/api/v1/clients/:client_id/providers/...`
+- [x] All endpoints implemented under client scope
+- [x] Admin middleware applied
+- [x] Client ownership validated (provider belongs to client)
+- [x] Request/response DTOs defined
+- [x] Input validation works
+- [x] Error responses follow OAuth 2.0 format
+- [x] Provider secrets excluded from responses
+- [x] Routes properly nested: `/api/v1/clients/:client_id/providers/...`
 
 **Deliverables:**
-- `internal/transport/http/api/v1/handler/provider_handler.go`
-- Updated `dto.go`
-- Updated router configuration
+- `internal/transport/http/api/v1/handler/provider_handler.go` ✓
+- Updated `dto.go` ✓
+- Updated router configuration ✓
+
+**Notes:**
+- `AdminMiddleware` created at `internal/middleware/admin.go`; requires prior `AuthMiddleware` to populate `user_id` in context, then calls `user.Service.IsAdmin()` — returns 403 if not admin.
+- `ErrProviderClientMismatch` is surfaced as 404 to avoid leaking cross-client information.
+- `handler.New()` updated to accept both `*user.Service` and `*provider.Service`; `api.RegisterRoutes` and `v1.RegisterRoutes` signatures updated accordingly.
+- Provider client credentials (`provider_client_id`, `provider_client_secret`) are intentionally excluded from all API responses.
 
 ### 5.2 Task 4.2: Implement Public Authentication Endpoints
 
@@ -1002,7 +1008,7 @@ WHERE id = $1;
 
 ### Phase 4 Completion Checklist
 
-- [ ] All API endpoints implemented
+- [x] All API endpoints implemented (Task 4.1 ✓)
 - [ ] Web endpoints functional
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints

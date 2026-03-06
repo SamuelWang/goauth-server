@@ -53,7 +53,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	r := gin.New()
 
 	// Register routes
-	api.RegisterRoutes(r, cfg, authService, userService)
+	api.RegisterRoutes(r, cfg, authService, userService, providerSvc)
 	web.RegisterRoutes(r, cfg, authService)
 	ops.RegisterRoutes(r)
 
