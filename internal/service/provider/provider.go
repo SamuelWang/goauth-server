@@ -72,13 +72,13 @@ type UpdateProviderDTO struct {
 
 // Service manages OAuth providers for client applications.
 type Service struct {
-	repo          *repository.Queries
+	repo          repository.Querier
 	encryptionKey []byte
 }
 
 // New creates a new provider Service.
 // encryptionKey must be exactly 32 bytes (required for AES-256-GCM).
-func New(repo *repository.Queries, encryptionKey []byte) (*Service, error) {
+func New(repo repository.Querier, encryptionKey []byte) (*Service, error) {
 	if len(encryptionKey) != 32 {
 		return nil, fmt.Errorf("provider encryption key must be exactly 32 bytes, got %d", len(encryptionKey))
 	}

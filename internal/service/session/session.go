@@ -84,11 +84,11 @@ type ListAccessTokensResult struct {
 
 // Service manages authorization code and access token sessions.
 type Service struct {
-	repo *repository.Queries
+	repo repository.Querier
 }
 
 // New creates a new session Service.
-func New(repo *repository.Queries) *Service {
+func New(repo repository.Querier) *Service {
 	return &Service{repo: repo}
 }
 

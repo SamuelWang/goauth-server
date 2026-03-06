@@ -55,11 +55,11 @@ type ListUsersResult struct {
 
 // Service manages user accounts.
 type Service struct {
-	repo *repository.Queries
+	repo repository.Querier
 }
 
 // New creates a new user Service.
-func New(repo *repository.Queries) *Service {
+func New(repo repository.Querier) *Service {
 	return &Service{repo: repo}
 }
 

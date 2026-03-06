@@ -76,14 +76,14 @@ type ListClientsResult struct {
 
 // Service manages client applications.
 type Service struct {
-	repo *repository.Queries
+	repo repository.Querier
 	// env is consulted for redirect URI validation (e.g., "production" enforces HTTPS).
 	env string
 }
 
 // New creates a new client Service.
 // env should match config.Server.Env (e.g., "production", "development").
-func New(repo *repository.Queries, env string) *Service {
+func New(repo repository.Querier, env string) *Service {
 	return &Service{repo: repo, env: env}
 }
 
