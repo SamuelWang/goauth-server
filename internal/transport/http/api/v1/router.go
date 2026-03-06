@@ -11,17 +11,23 @@ import (
 )
 
 func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service) {
-	h := handler.New(userService, providerService)
+	h := handler.New(authService, userService, providerService)
 
-	// Auth routes
-	authGroup := r.Group("/auth")
+	// Public auth routes
+	publicAuth := r.Group("/auth")
 	{
-		// Public routes
-		authGroup.POST("/logout", h.Logout)
+		publicAuth.POST("/token", h.TokenExchange)
+	}
 
-		// Protected routes
-		authGroup.Use(middleware.AuthMiddleware(authService))
-		authGroup.GET("/me", h.GetCurrentUser)
+	// Public client-scoped routes
+	r.GET("/clients/:client_id/auth/providers", h.ListEnabledProviders)
+
+	// Protected auth routes (require a valid bearer token)
+	protectedAuth := r.Group("/auth")
+	protectedAuth.Use(middleware.AuthMiddleware(authService))
+	{
+		protectedAuth.POST("/logout", h.Logout)
+		protectedAuth.GET("/me", h.GetCurrentUser)
 	}
 
 	// Client-scoped provider routes (admin only)

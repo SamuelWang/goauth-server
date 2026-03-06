@@ -280,6 +280,12 @@ func (s *Service) RevokeToken(ctx context.Context, tokenHash string) error {
 	return nil
 }
 
+// RevokeRawToken hashes rawToken and revokes it. This is a convenience wrapper
+// for callers (e.g. the logout handler) that hold the plain token string.
+func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
+	return s.RevokeToken(ctx, hashToken(rawToken))
+}
+
 // upsertUser looks up a user by their OAuth provider ID. If the user exists,
 // it updates the last-login timestamp; otherwise it creates a new account.
 func (s *Service) upsertUser(ctx context.Context, providerName string, info *ProviderUserInfo) (repository.User, error) {

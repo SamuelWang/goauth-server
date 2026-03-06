@@ -1,18 +1,21 @@
 package handler
 
 import (
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/gin-gonic/gin"
 )
 
 type ApiV1Handler struct {
+	authService     *auth.Service
 	userService     *user.Service
 	providerService *provider.Service
 }
 
-func New(userService *user.Service, providerService *provider.Service) *ApiV1Handler {
+func New(authService *auth.Service, userService *user.Service, providerService *provider.Service) *ApiV1Handler {
 	return &ApiV1Handler{
+		authService:     authService,
 		userService:     userService,
 		providerService: providerService,
 	}

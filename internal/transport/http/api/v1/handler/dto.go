@@ -2,6 +2,41 @@ package handler
 
 import "time"
 
+// --- Token exchange ---
+
+// TokenExchangeRequest is the request body for POST /api/v1/auth/token.
+// grant_type must be "authorization_code".
+type TokenExchangeRequest struct {
+	GrantType    string `json:"grant_type" binding:"required"`
+	Code         string `json:"code" binding:"required"`
+	ClientID     string `json:"client_id" binding:"required"`
+	ClientSecret string `json:"client_secret" binding:"required"`
+	RedirectURI  string `json:"redirect_uri" binding:"required"`
+}
+
+// TokenExchangeResponse is the OAuth 2.0 token endpoint response.
+type TokenExchangeResponse struct {
+	AccessToken string  `json:"access_token"`
+	TokenType   string  `json:"token_type"`
+	ExpiresIn   int64   `json:"expires_in"`
+	Scope       *string `json:"scope,omitempty"`
+}
+
+// --- Public provider list ---
+
+// PublicProviderResponse is a client-safe view of an OAuth provider.
+// No credentials or internal URLs are exposed.
+type PublicProviderResponse struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+}
+
+// ListPublicProvidersResponse is the response for
+// GET /api/v1/clients/:client_id/auth/providers.
+type ListPublicProvidersResponse struct {
+	Providers []PublicProviderResponse `json:"providers"`
+}
+
 // UserDTO represents the user object returned by API responses.
 type UserDTO struct {
 	ID            string    `json:"id"`

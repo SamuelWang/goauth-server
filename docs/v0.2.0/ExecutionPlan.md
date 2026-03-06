@@ -807,17 +807,26 @@ WHERE id = $1;
 5. Add to router
 
 **Acceptance Criteria:**
-- [ ] Provider list returns only enabled providers for specified client
-- [ ] Provider list excludes sensitive data (secrets)
-- [ ] Client_id validated in provider list endpoint
-- [ ] Token endpoint validates all parameters including client_id
-- [ ] Token endpoint returns OAuth 2.0 compliant response
-- [ ] Logout requires valid bearer token
-- [ ] Routes use client scoping where appropriate
+- [x] Provider list returns only enabled providers for specified client
+- [x] Provider list excludes sensitive data (secrets)
+- [x] Client_id validated in provider list endpoint
+- [x] Token endpoint validates all parameters including client_id
+- [x] Token endpoint returns OAuth 2.0 compliant response
+- [x] Logout requires valid bearer token
+- [x] Routes use client scoping where appropriate
 
 **Deliverables:**
-- Updated auth handler
-- DTOs for token exchange and provider listing
+- Updated `internal/transport/http/api/v1/handler/auth_handler.go` ✓
+- Updated `internal/transport/http/api/v1/handler/dto.go` ✓ (TokenExchangeRequest/Response, PublicProviderResponse)
+- Updated `internal/transport/http/api/v1/router.go` ✓
+
+**Notes:**
+- `GET /api/v1/clients/:client_id/auth/providers` is fully public; it returns only `name` and `display_name` fields — no internal URLs or credentials.
+- `POST /api/v1/auth/token` accepts a JSON body with `grant_type` (must be `"authorization_code"`), `code`, `client_id` (UUID string), `client_secret`, and `redirect_uri`. Returns an OAuth 2.0 token response (`access_token`, `token_type`, `expires_in`, `scope`). Auth service errors are mapped to `invalid_client` / `invalid_grant` error codes.
+- `POST /api/v1/auth/logout` is now protected by `AuthMiddleware`. It revokes the token in the database via `authService.RevokeRawToken` before clearing the session cookie, preventing token replay attacks.
+- `RevokeRawToken(ctx, rawToken)` was added to `internal/service/auth/authorization.go` as a convenience wrapper that hashes the raw token internally.
+- `AuthMiddleware` was updated to support the `Authorization: Bearer <token>` header in addition to the `access_token` cookie, and now stores the raw token in the Gin context under the `"raw_token"` key for use by the logout handler.
+- `handler.New()` now accepts `*auth.Service` as its first parameter.
 
 ### 5.3 Task 4.3: Implement Web OAuth Flow Endpoints
 
@@ -1008,7 +1017,7 @@ WHERE id = $1;
 
 ### Phase 4 Completion Checklist
 
-- [x] All API endpoints implemented (Task 4.1 ✓)
+- [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓)
 - [ ] Web endpoints functional
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints
