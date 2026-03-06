@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SamuelWang/goauth-server/internal/auth"
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
@@ -28,12 +27,6 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	// Initialize repository
 	repo := repository.New(dbPool)
 
-	// Initialize Access Token manager
-	accessTokenManager, err := auth.NewAccessTokenManager(cfg)
-	if err != nil {
-		return nil, err
-	}
-
 	// Initialize provider service (requires a 32-byte AES-256 key, hex-encoded in config).
 	encKeyBytes, err := hex.DecodeString(cfg.Security.ProviderEncryptionKey)
 	if err != nil {
@@ -45,7 +38,10 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	}
 
 	// Initialize services
-	authService := authservice.New(repo, cfg, accessTokenManager, providerSvc)
+	authService, err := authservice.New(repo, cfg, providerSvc)
+	if err != nil {
+		return nil, fmt.Errorf("initializing auth service: %w", err)
+	}
 	userService := user.New(repo)
 
 	// Set Gin mode

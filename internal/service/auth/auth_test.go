@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	authpkg "github.com/SamuelWang/goauth-server/internal/auth"
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
@@ -31,7 +30,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// mockProviderService is a testify mock for the providerQuerier interface.
+// mockProviderService is a testify mock for the providerServicer interface.
 type mockProviderService struct {
 	mock.Mock
 }
@@ -73,15 +72,11 @@ func newTestService(t *testing.T, q *mocks.MockQuerier, psvc *mockProviderServic
 			Expiry:     60,
 		},
 	}
-	atm, err := authpkg.NewAccessTokenManager(cfg)
-	require.NoError(t, err)
 
-	svc := &Service{
-		cfg:                cfg,
-		repo:               q,
-		accessTokenManager: atm,
-		providerSvc:        psvc,
-	}
+	svc, err := New(q, cfg, psvc)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+
 	return svc
 }
 
@@ -475,7 +470,7 @@ func TestValidateAccessToken_ValidToken(t *testing.T) {
 
 	userID := uuid.New().String()
 	email := "valid@example.com"
-	token, err := svc.accessTokenManager.GenerateToken(userID, email)
+	token, err := svc.GenerateAccessToken(userID, email)
 	require.NoError(t, err)
 
 	claims, err := svc.ValidateAccessToken(token)
@@ -591,6 +586,7 @@ func util_strPtr(s string) *string { return &s }
 
 func TestNew_Constructor(t *testing.T) {
 	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
 	privPEM, pubPEM := generateTestPEMKeys(t)
 	cfg := &config.Config{
 		App: config.AppConfig{Name: "test"},
@@ -600,10 +596,9 @@ func TestNew_Constructor(t *testing.T) {
 			Expiry:     30,
 		},
 	}
-	atm, err := authpkg.NewAccessTokenManager(cfg)
-	require.NoError(t, err)
 
-	svc := New(q, cfg, atm, nil)
+	svc, err := New(q, cfg, psvc)
+	require.NoError(t, err)
 	require.NotNil(t, svc)
 }
 
@@ -644,9 +639,9 @@ func TestGetGoogleLoginURL_Enabled(t *testing.T) {
 			},
 		},
 	}
-	atm, err := authpkg.NewAccessTokenManager(cfg)
+	svc, err := New(q, cfg, psvc)
 	require.NoError(t, err)
-	svc := &Service{cfg: cfg, repo: q, accessTokenManager: atm, providerSvc: psvc}
+	require.NotNil(t, svc)
 
 	url, err := svc.GetGoogleLoginURL("mystate")
 	require.NoError(t, err)
@@ -903,9 +898,9 @@ func TestHandleProviderCallback_ExchangeCodeError(t *testing.T) {
 
 	// Server returns 400 on token exchange.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-w.WriteHeader(http.StatusBadRequest)
-fmt.Fprint(w, `{"error":"invalid_grant"}`)
-}))
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"error":"invalid_grant"}`)
+	}))
 	defer srv.Close()
 
 	p := activeProviderWithSecret(srv.URL, client.ID)
@@ -929,9 +924,9 @@ func TestHandleProviderCallback_FetchUserInfoError(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.WriteHeader(http.StatusInternalServerError)
@@ -960,9 +955,9 @@ func TestHandleProviderCallback_CreateAuthCodeError(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -979,9 +974,9 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(repository.User{}, pgx.ErrNoRows)
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(repository.User{}, pgx.ErrNoRows)
 	q.On("CreateUser", mock.Anything, mock.Anything).Return(user, nil)
 	q.On("CreateAuthorizationCode", mock.Anything, mock.Anything).
 		Return(repository.AuthorizationCode{}, errors.New("db error"))
@@ -1002,9 +997,9 @@ func TestHandleProviderCallback_EmptyLocale(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1022,12 +1017,12 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(repository.User{}, pgx.ErrNoRows)
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(repository.User{}, pgx.ErrNoRows)
 	q.On("CreateUser", mock.Anything, mock.Anything).Return(user, nil)
 	q.On("CreateAuthorizationCode", mock.Anything, mock.Anything).Return(repository.AuthorizationCode{
-ID:   uuid.New(),
+		ID:   uuid.New(),
 		Code: "auth-code-locale",
 	}, nil)
 
@@ -1202,9 +1197,9 @@ func TestHandleProviderCallback_UpdateLastLoginError(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1221,9 +1216,9 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(existingUser, nil) // user exists
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(existingUser, nil) // user exists
 	q.On("UpdateLastLogin", mock.Anything, mock.Anything).Return(repository.User{}, errors.New("db error"))
 
 	svc := newTestService(t, q, psvc)
@@ -1244,9 +1239,9 @@ func TestHandleProviderCallback_MissingSubInUserInfo(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1276,9 +1271,9 @@ func TestHandleProviderCallback_MissingEmailInUserInfo(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1308,9 +1303,9 @@ func TestHandleProviderCallback_NonBoolEmailVerified(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1328,12 +1323,12 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(repository.User{}, pgx.ErrNoRows)
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(repository.User{}, pgx.ErrNoRows)
 	q.On("CreateUser", mock.Anything, mock.Anything).Return(user, nil)
 	q.On("CreateAuthorizationCode", mock.Anything, mock.Anything).Return(repository.AuthorizationCode{
-ID:   uuid.New(),
+		ID:   uuid.New(),
 		Code: "auth-code-strbool",
 	}, nil)
 
@@ -1355,9 +1350,9 @@ func TestHandleProviderCallback_CreateUserError(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1373,9 +1368,9 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(repository.User{}, pgx.ErrNoRows)
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(repository.User{}, pgx.ErrNoRows)
 	q.On("CreateUser", mock.Anything, mock.Anything).Return(repository.User{}, errors.New("db error"))
 
 	svc := newTestService(t, q, psvc)
@@ -1396,9 +1391,9 @@ func TestHandleProviderCallback_UseFirstNameLastName(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1416,12 +1411,12 @@ w.Header().Set("Content-Type", "application/json")
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 	q.On("GetUserByProviderID", mock.Anything, repository.GetUserByProviderIDParams{
-Provider:   provPtr,
-ProviderID: subPtr,
-}).Return(repository.User{}, pgx.ErrNoRows)
+		Provider:   provPtr,
+		ProviderID: subPtr,
+	}).Return(repository.User{}, pgx.ErrNoRows)
 	q.On("CreateUser", mock.Anything, mock.Anything).Return(user, nil)
 	q.On("CreateAuthorizationCode", mock.Anything, mock.Anything).Return(repository.AuthorizationCode{
-ID:   uuid.New(),
+		ID:   uuid.New(),
 		Code: "auth-code-firstname",
 	}, nil)
 
@@ -1441,9 +1436,9 @@ func TestHandleProviderCallback_InvalidJSONUserInfo(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-switch r.URL.Path {
-case "/token":
-w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 		case "/userinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -1473,7 +1468,7 @@ func TestHandleProviderCallback_InvalidUserInfoURL(t *testing.T) {
 	client.IsActive = &isActive
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 	}))
 	defer srv.Close()
@@ -1501,7 +1496,7 @@ func TestHandleProviderCallback_UserInfoConnRefused(t *testing.T) {
 
 	// Token server stays up for the code exchange
 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"access_token":"tok","token_type":"Bearer","expires_in":3600}`)
 	}))
 	defer tokenSrv.Close()

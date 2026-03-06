@@ -102,7 +102,7 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (string
 	}
 
 	// Generate access token
-	accessToken, err := s.accessTokenManager.GenerateToken(user.ID.String(), user.Email)
+	accessToken, err := s.GenerateAccessToken(user.ID.String(), user.Email)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate access token: %w", err)
 	}

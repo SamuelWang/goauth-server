@@ -237,14 +237,14 @@ func (s *Service) ExchangeCodeForToken(
 	}
 
 	// 6. Generate and sign the JWT access token.
-	tokenString, err := s.accessTokenManager.GenerateToken(user.ID.String(), user.Email)
+	tokenString, err := s.GenerateAccessToken(user.ID.String(), user.Email)
 	if err != nil {
 		return nil, fmt.Errorf("generating access token: %w", err)
 	}
 
 	// 7. Store the token hash for revocation lookup.
 	tokenHash := hashToken(tokenString)
-	expiresAt := time.Now().Add(s.accessTokenManager.Expiry())
+	expiresAt := time.Now().Add(s.Expiry())
 	_, err = s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: tokenHash,
 		ClientID:  clientID,
@@ -259,7 +259,7 @@ func (s *Service) ExchangeCodeForToken(
 	return &TokenResponse{
 		AccessToken: tokenString,
 		TokenType:   "Bearer",
-		ExpiresIn:   int64(s.accessTokenManager.Expiry().Seconds()),
+		ExpiresIn:   int64(s.Expiry().Seconds()),
 		Scope:       authCode.Scope,
 	}, nil
 }
