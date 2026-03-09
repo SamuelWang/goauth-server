@@ -845,20 +845,29 @@ WHERE id = $1;
 7. Add to web router
 
 **Acceptance Criteria:**
-- [ ] Client_id parameter validated
-- [ ] Provider parameter validated for client
-- [ ] Provider belongs to client check enforced
-- [ ] State parameter stored in secure session cookie with client context
-- [ ] CSRF protection via state validation
-- [ ] Redirects work correctly
-- [ ] Error pages display helpful messages
-- [ ] Authorization code passed to client
-- [ ] Routes include both client_id and provider: `/web/auth/:client_id/:provider/...`
+- [x] Client_id parameter validated
+- [x] Provider parameter validated for client
+- [x] Provider belongs to client check enforced
+- [x] State parameter stored in secure session cookie with client context
+- [x] CSRF protection via state validation
+- [x] Redirects work correctly
+- [x] Error pages display helpful messages
+- [x] Authorization code passed to client
+- [x] Routes include both client_id and provider: `/web/auth/:client_id/:provider/...`
 
 **Deliverables:**
-- Updated web auth handler
-- Session middleware with client context support
+- Updated web auth handler ✓
+- Session middleware with client context support ✓
 - Error page templates (if needed)
+
+**Notes:**
+- `GET /web/auth/:client_id/:provider/login` accepts `redirect_uri` (required) and `scope` (optional) query params. It validates the client and provider via `authService.InitiateAuthorization`, stores a signed session cookie (`oauth_session`) containing `{state, client_id, provider, redirect_uri}`, and redirects the user to the OAuth provider.
+- `GET /web/auth/:client_id/:provider/callback` reads and HMAC-verifies the session cookie, validates state (CSRF protection) and path-parameter binding, calls `authService.HandleProviderCallback`, then redirects to `redirect_uri?code=<auth_code>`.
+- Session cookies are HMAC-SHA256-signed using the hex-decoded `PROVIDER_ENCRYPTION_KEY` to prevent tampering with the redirect URI or session context.
+- The callback URL sent to the OAuth provider is constructed from `cfg.Server.Scheme`, `cfg.Server.HostName`, and `cfg.Server.Port`.
+- Old Google-specific handlers (`GoogleLogin`, `GoogleCallback`) have been replaced by the generic client-scoped handlers.
+- `handler.New()` updated to accept `*config.Config` and `[]byte` signing key; `web.RegisterRoutes` derives the signing key and passes it through.
+- Routes are nested under `/web` prefix: `/web/auth/:client_id/:provider/login` and `/web/auth/:client_id/:provider/callback`.
 
 ### 5.4 Task 4.4: Implement Client Management Endpoints
 
@@ -1018,7 +1027,7 @@ WHERE id = $1;
 ### Phase 4 Completion Checklist
 
 - [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓)
-- [ ] Web endpoints functional
+- [x] Web endpoints functional (Task 4.3 ✓)
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints
 - [ ] Input validation comprehensive

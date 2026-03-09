@@ -56,6 +56,11 @@ type SecurityConfig struct {
 	// ProviderEncryptionKey is a hex-encoded 32-byte key used for AES-256-GCM
 	// encryption of OAuth provider client secrets at rest.
 	ProviderEncryptionKey string
+
+	// SessionSigningKey is a hex-encoded key used for HMAC-SHA256 signing of
+	// OAuth session cookies. It must be kept separate from ProviderEncryptionKey
+	// to satisfy the key-separation principle.
+	SessionSigningKey string
 }
 
 func Load() (*Config, error) {
@@ -97,6 +102,7 @@ func Load() (*Config, error) {
 		},
 		Security: SecurityConfig{
 			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
+			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
 		},
 	}
 
@@ -115,6 +121,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.AccessToken.PublicKey == "" {
 		return nil, fmt.Errorf("ACCESS_TOKEN_PUBLIC_KEY is required")
+	}
+	if cfg.Security.ProviderEncryptionKey == "" {
+		return nil, fmt.Errorf("PROVIDER_ENCRYPTION_KEY is required")
+	}
+	if cfg.Security.SessionSigningKey == "" {
+		return nil, fmt.Errorf("SESSION_SIGNING_KEY is required")
 	}
 
 	return cfg, nil

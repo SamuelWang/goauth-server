@@ -1,17 +1,22 @@
 package handler
 
 import (
+	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/gin-gonic/gin"
 )
 
 type WebHandler struct {
 	authService *auth.Service
+	cfg         *config.Config
+	signingKey  []byte
 }
 
-func New(authService *auth.Service) *WebHandler {
+func New(authService *auth.Service, cfg *config.Config, signingKey []byte) *WebHandler {
 	return &WebHandler{
 		authService: authService,
+		cfg:         cfg,
+		signingKey:  signingKey,
 	}
 }
 
