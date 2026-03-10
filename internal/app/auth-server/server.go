@@ -9,6 +9,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api"
@@ -43,6 +44,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 		return nil, fmt.Errorf("initializing auth service: %w", err)
 	}
 	userService := user.New(repo)
+	clientService := client.New(repo, cfg.Server.Env)
 
 	// Set Gin mode
 	if cfg.Server.Env == "production" {
@@ -53,7 +55,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	r := gin.New()
 
 	// Register routes
-	api.RegisterRoutes(r, cfg, authService, userService, providerSvc)
+	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService)
 	web.RegisterRoutes(r, cfg, authService)
 	ops.RegisterRoutes(r)
 

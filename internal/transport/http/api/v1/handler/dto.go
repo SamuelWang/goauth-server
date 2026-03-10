@@ -2,6 +2,52 @@ package handler
 
 import "time"
 
+// --- Client management ---
+
+// ClientResponse is the client object returned in API responses.
+// The client secret hash is never included.
+type ClientResponse struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Description  *string   `json:"description,omitempty"`
+	RedirectURIs []string  `json:"redirect_uris"`
+	GrantTypes   []string  `json:"grant_types"`
+	IsActive     bool      `json:"is_active"`
+	CreatedBy    string    `json:"created_by"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// ClientWithSecretResponse extends ClientResponse with the plain client secret.
+// Only returned once at creation or secret regeneration.
+type ClientWithSecretResponse struct {
+	ClientResponse
+	ClientSecret string `json:"client_secret"`
+}
+
+// ListClientsResponse wraps a paginated list of clients.
+type ListClientsResponse struct {
+	Clients []ClientResponse `json:"clients"`
+	Total   int64            `json:"total"`
+}
+
+// CreateClientRequest is the request body for POST /api/v1/clients.
+type CreateClientRequest struct {
+	Name         string   `json:"name" binding:"required"`
+	Description  *string  `json:"description"`
+	RedirectURIs []string `json:"redirect_uris" binding:"required,min=1"`
+	GrantTypes   []string `json:"grant_types" binding:"required,min=1"`
+	IsActive     bool     `json:"is_active"`
+}
+
+// UpdateClientRequest is the request body for PATCH /api/v1/clients/:id.
+type UpdateClientRequest struct {
+	Name         string   `json:"name" binding:"required"`
+	Description  *string  `json:"description"`
+	RedirectURIs []string `json:"redirect_uris" binding:"required,min=1"`
+	GrantTypes   []string `json:"grant_types" binding:"required,min=1"`
+}
+
 // --- Token exchange ---
 
 // TokenExchangeRequest is the request body for POST /api/v1/auth/token.

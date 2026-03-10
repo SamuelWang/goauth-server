@@ -3,6 +3,7 @@ package v1
 import (
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api/v1/handler"
@@ -10,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service) {
-	h := handler.New(authService, userService, providerService)
+func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service) {
+	h := handler.New(authService, userService, providerService, clientService)
 
 	// Public auth routes
 	publicAuth := r.Group("/auth")
@@ -28,6 +29,18 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 	{
 		protectedAuth.POST("/logout", h.Logout)
 		protectedAuth.GET("/me", h.GetCurrentUser)
+	}
+
+	// Client management routes (admin only)
+	clientsGroup := r.Group("/clients")
+	clientsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService))
+	{
+		clientsGroup.GET("", h.ListClients)
+		clientsGroup.GET("/:id", h.GetClient)
+		clientsGroup.POST("", h.CreateClient)
+		clientsGroup.PATCH("/:id", h.UpdateClient)
+		clientsGroup.POST("/:id/regenerate-secret", h.RegenerateClientSecret)
+		clientsGroup.DELETE("/:id", h.DeleteClient)
 	}
 
 	// Client-scoped provider routes (admin only)

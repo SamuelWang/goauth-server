@@ -888,15 +888,26 @@ WHERE id = $1;
 5. Add to router
 
 **Acceptance Criteria:**
-- [ ] All endpoints implemented
-- [ ] Pagination works
-- [ ] Secret only returned at creation/regeneration
-- [ ] Admin authorization enforced
-- [ ] Input validation works
+- [x] All endpoints implemented
+- [x] Pagination works
+- [x] Secret only returned at creation/regeneration
+- [x] Admin authorization enforced
+- [x] Input validation works
 
 **Deliverables:**
-- Client handler
-- Client DTOs
+- `internal/transport/http/api/v1/handler/client_handler.go` ✓
+- Updated `dto.go` with client request/response types ✓
+- Updated `handler.go` to include `clientService` dependency ✓
+- Updated `v1/router.go` with client management routes ✓
+- Updated `api/router.go` and `server.go` to wire `client.Service` ✓
+
+**Notes:**
+- All client routes are nested under `/api/v1/clients` and protected by `AuthMiddleware` + `AdminMiddleware`.
+- `GET /api/v1/clients` supports `limit`, `offset`, and optional `is_active` query parameters for pagination and filtering.
+- `POST /api/v1/clients` and `POST /api/v1/clients/:id/regenerate-secret` return a `ClientWithSecretResponse` containing the plain `client_secret` — this is the only time it is exposed.
+- `DELETE /api/v1/clients/:id` performs a soft delete (sets `is_active = false`), preserving the audit trail.
+- The `client_id` used in nested provider routes (`/clients/:client_id/providers`) is a distinct path parameter from the `:id` used by the client management routes, so there is no routing conflict.
+- `client.New(repo, cfg.Server.Env)` is initialised in `server.go` and propagated through `api.RegisterRoutes` → `v1.RegisterRoutes` → `handler.New`.
 
 ### 5.5 Task 4.5: Implement User Management Endpoints
 
@@ -1026,8 +1037,9 @@ WHERE id = $1;
 
 ### Phase 4 Completion Checklist
 
-- [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓)
+- [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓, Task 4.4 ✓)
 - [x] Web endpoints functional (Task 4.3 ✓)
+- [ ] Remaining endpoints implemented (Task 4.5 users, Task 4.6 sessions)
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints
 - [ ] Input validation comprehensive
