@@ -37,11 +37,11 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 	clientsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService))
 	{
 		clientsGroup.GET("", h.ListClients)
-		clientsGroup.GET("/:id", h.GetClient)
+		clientsGroup.GET("/:client_id", h.GetClient)
 		clientsGroup.POST("", h.CreateClient)
-		clientsGroup.PATCH("/:id", h.UpdateClient)
-		clientsGroup.POST("/:id/regenerate-secret", h.RegenerateClientSecret)
-		clientsGroup.DELETE("/:id", h.DeleteClient)
+		clientsGroup.PATCH("/:client_id", h.UpdateClient)
+		clientsGroup.POST("/:client_id/regenerate-secret", h.RegenerateClientSecret)
+		clientsGroup.DELETE("/:client_id", h.DeleteClient)
 	}
 
 	// Client-scoped provider routes (admin only)

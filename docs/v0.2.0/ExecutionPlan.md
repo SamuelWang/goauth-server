@@ -1044,20 +1044,29 @@ WHERE id = $1;
 7. Ensure >80% API coverage
 
 **Acceptance Criteria:**
-- [ ] Complete OAuth flow tested with client context
-- [ ] All admin endpoints tested
-- [ ] Client-scoped provider endpoints tested
-- [ ] Provider isolation between clients verified
-- [ ] Client ownership validation tested
-- [ ] Authentication middleware tested
-- [ ] Authorization middleware tested
-- [ ] Error responses tested
-- [ ] Code coverage >80%
-- [ ] All tests pass
+- [x] Complete OAuth flow tested with client context
+- [x] All admin endpoints tested
+- [x] Client-scoped provider endpoints tested
+- [x] Provider isolation between clients verified
+- [x] Client ownership validation tested
+- [x] Authentication middleware tested
+- [x] Authorization middleware tested
+- [x] Error responses tested
+- [x] Code coverage >80%
+- [x] All tests pass
 
 **Deliverables:**
-- Integration test suite
-- Client-provider isolation tests
+- `internal/transport/http/api/v1/handler/testhelpers_test.go` — shared test infrastructure (`testEnv`, mock setup helpers, token helpers, fixture builders)
+- `internal/transport/http/api/v1/handler/auth_handler_test.go` — 21 tests: public provider listing, token exchange (10 scenarios), logout, me endpoint, protected route middleware
+- `internal/transport/http/api/v1/handler/client_handler_test.go` — 17 tests: list/get/create/update/regenerate-secret/delete clients including admin authorization
+- `internal/transport/http/api/v1/handler/provider_handler_test.go` — 15 tests: list/get/create/update/delete providers, cross-client isolation, credential exclusion
+- `internal/transport/http/api/v1/handler/session_handler_test.go` — 15 tests: list/revoke authorization codes and access tokens, filtering, token hash exclusion
+- `internal/transport/http/api/v1/handler/user_handler_test.go` — 11 tests: list users with filters, update user active status
+
+**Notes:**
+- Tests use a mock-based integration approach: a real Gin router with all routes registered runs against a `MockQuerier`, enabling end-to-end handler testing without a database.
+- Router bug fixed: `/:id` and `/:client_id` param name conflict in `/clients/:id` vs `/clients/:client_id/providers` routes; resolved by standardizing to `/:client_id` and updating `client_handler.go`.
+- Total: 79 tests, all passing.
 
 ### Phase 4 Completion Checklist
 
@@ -1066,11 +1075,11 @@ WHERE id = $1;
 - [x] User management endpoints implemented (Task 4.5 ✓)
 - [x] Remaining endpoints implemented (Task 4.6 ✓ sessions)
 - [x] Middleware implemented and tested (Task 4.7 ✓)
-- [ ] DTOs defined for all endpoints
-- [ ] Input validation comprehensive
-- [ ] Error handling consistent
-- [ ] Integration tests pass with >80% coverage
-- [ ] API documentation started
+- [x] DTOs defined for all endpoints
+- [x] Input validation comprehensive
+- [x] Error handling consistent
+- [x] Integration tests pass with >80% coverage (Task 4.8 ✓)
+- [x] API documentation started
 
 ## 6. Phase 5: Security Hardening
 

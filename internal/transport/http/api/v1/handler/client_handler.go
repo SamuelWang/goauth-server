@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// parseClientResourceID extracts and validates the :id path parameter for client resources.
+// parseClientResourceID extracts and validates the :client_id path parameter for client resources.
 func parseClientResourceID(c *gin.Context) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid client id"})
 		return uuid.UUID{}, false
