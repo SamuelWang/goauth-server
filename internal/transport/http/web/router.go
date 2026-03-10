@@ -25,9 +25,10 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config, authService *auth.Service
 	webGroup.Use(gin.Recovery(), gin.Logger(), middleware.ContextMiddleware(cfg))
 
 	// Client-scoped OAuth web flow (public).
+	// Authorization initiation: 20 requests per minute per IP.
 	authGroup := webGroup.Group("/auth/:client_id/:provider")
 	{
-		authGroup.GET("/login", webHandler.Login)
+		authGroup.GET("/login", middleware.RateLimitByIP(middleware.AuthRatePerMin, middleware.AuthRatePerMin), webHandler.Login)
 		authGroup.GET("/callback", webHandler.Callback)
 	}
 }

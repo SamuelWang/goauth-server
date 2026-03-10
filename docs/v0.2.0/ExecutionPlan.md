@@ -1105,16 +1105,23 @@ WHERE id = $1;
 7. Add tests
 
 **Acceptance Criteria:**
-- [ ] Rate limits enforced per specification
-- [ ] 429 responses returned correctly
-- [ ] Retry-After header included
-- [ ] Tests verify limits work
-- [ ] Performance impact minimal
+- [x] Rate limits enforced per specification
+- [x] 429 responses returned correctly
+- [x] Retry-After header included
+- [x] Tests verify limits work
+- [x] Performance impact minimal
 
 **Deliverables:**
-- Rate limiting middleware
-- Configuration for rate limits
-- Tests
+- `internal/middleware/ratelimit.go` ✓ — `RateLimitByIP` and `RateLimitByUser` middleware backed by per-key `golang.org/x/time/rate` token-bucket limiters; stale entries evicted by a background ticker.
+- `internal/middleware/ratelimit_test.go` ✓ — 11 tests covering burst allowance, 429 blocking, Retry-After header, per-key isolation, user-ID fallback to IP, and constant values.
+- Updated `internal/transport/http/api/v1/router.go` ✓ — `POST /auth/token` uses `RateLimitByIP(10, 10)`; all four admin groups (clients, providers, users, sessions) use `RateLimitByUser(30, 30)`.
+- Updated `internal/transport/http/web/router.go` ✓ — `GET /web/auth/:client_id/:provider/login` uses `RateLimitByIP(20, 20)`.
+
+**Notes:**
+- Rate limits: token endpoint 10 req/min per IP (burst 10); authorization login 20 req/min per IP (burst 20); admin endpoints 30 req/min per user (burst 30), falling back to IP when unauthenticated.
+- `RateLimitByUser` must run after `AuthMiddleware` to access `user_id` from context.
+- `Retry-After` header is computed via `rate.Limiter.Reserve()` for an accurate delay (minimum 1 s).
+- Memory is bounded: each `keyedLimiter` runs a background goroutine that purges entries not seen in the last 5 minutes.
 
 ### 6.2 Task 5.2: Configure CORS
 
@@ -1287,7 +1294,7 @@ WHERE id = $1;
 
 ### Phase 5 Completion Checklist
 
-- [ ] Rate limiting implemented and tested
+- [x] Rate limiting implemented and tested
 - [ ] CORS configured correctly
 - [ ] CSRF protection complete
 - [ ] Security headers applied
