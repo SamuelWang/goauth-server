@@ -924,14 +924,21 @@ WHERE id = $1;
 5. Add to router
 
 **Acceptance Criteria:**
-- [ ] Pagination works
-- [ ] Filters work
-- [ ] Admin authorization enforced
-- [ ] Status updates work
+- [x] Pagination works
+- [x] Filters work
+- [x] Admin authorization enforced
+- [x] Status updates work
 
 **Deliverables:**
-- User handler
-- User DTOs
+- `internal/transport/http/api/v1/handler/user_handler.go` ✓
+- Updated `dto.go` with `UserResponse`, `ListUsersResponse`, `UpdateUserStatusRequest` ✓
+- Updated `v1/router.go` with user management routes ✓
+
+**Notes:**
+- `GET /api/v1/users` supports `limit`, `offset`, `is_active`, and `is_admin` query parameters for pagination and filtering.
+- `PATCH /api/v1/users/:id` accepts `{"is_active": bool}` and returns the updated `UserResponse`.
+- Both routes are protected by `AuthMiddleware` + `AdminMiddleware`.
+- `UpdateUserStatusRequest.IsActive` has no `binding:"required"` tag because both `true` and `false` are valid values; the field defaults to `false` if omitted, which disables the account.
 
 ### 5.6 Task 4.6: Implement Session Management Endpoints
 
@@ -1039,7 +1046,8 @@ WHERE id = $1;
 
 - [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓, Task 4.4 ✓)
 - [x] Web endpoints functional (Task 4.3 ✓)
-- [ ] Remaining endpoints implemented (Task 4.5 users, Task 4.6 sessions)
+- [x] User management endpoints implemented (Task 4.5 ✓)
+- [ ] Remaining endpoints implemented (Task 4.6 sessions)
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints
 - [ ] Input validation comprehensive

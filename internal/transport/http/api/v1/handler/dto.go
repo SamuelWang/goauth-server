@@ -144,3 +144,31 @@ type UpdateProviderRequest struct {
 	Scopes               []string `json:"scopes" binding:"required,min=1"`
 	IsEnabled            bool     `json:"is_enabled"`
 }
+
+// --- User management ---
+
+// UserResponse is the user object returned in API responses.
+type UserResponse struct {
+	ID            string    `json:"id"`
+	Email         string    `json:"email"`
+	EmailVerified bool      `json:"email_verified"`
+	FirstName     *string   `json:"first_name,omitempty"`
+	LastName      *string   `json:"last_name,omitempty"`
+	IsActive      bool      `json:"is_active"`
+	IsAdmin       bool      `json:"is_admin"`
+	Locale        string    `json:"locale"`
+	LastLoginAt   time.Time `json:"last_login_at"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// ListUsersResponse wraps a paginated list of users.
+type ListUsersResponse struct {
+	Users []UserResponse `json:"users"`
+	Total int64          `json:"total"`
+}
+
+// UpdateUserStatusRequest is the request body for PATCH /api/v1/users/:id.
+type UpdateUserStatusRequest struct {
+	IsActive bool `json:"is_active"`
+}

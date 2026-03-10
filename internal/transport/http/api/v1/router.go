@@ -53,4 +53,12 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 		clientProviderGroup.PATCH("/:id", h.UpdateProvider)
 		clientProviderGroup.DELETE("/:id", h.DeleteProvider)
 	}
+
+	// User management routes (admin only)
+	usersGroup := r.Group("/users")
+	usersGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService))
+	{
+		usersGroup.GET("", h.ListUsers)
+		usersGroup.PATCH("/:id", h.UpdateUserStatus)
+	}
 }
