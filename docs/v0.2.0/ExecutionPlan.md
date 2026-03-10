@@ -1237,15 +1237,26 @@ WHERE id = $1;
 5. Add to appropriate handlers and middleware
 
 **Acceptance Criteria:**
-- [ ] Security events logged with proper level
-- [ ] Logs structured (JSON format)
-- [ ] Sensitive data not logged
-- [ ] Request correlation works
-- [ ] Logs parseable for monitoring
+- [x] Security events logged with proper level
+- [x] Logs structured (JSON format)
+- [x] Sensitive data not logged
+- [x] Request correlation works
+- [x] Logs parseable for monitoring
 
 **Deliverables:**
-- Security logging utility
-- Integration in handlers/middleware
+- `internal/util/security_log.go` ✓ — `slog`-based JSON security logger with `SecurityEvent` type constants (`auth_failure`, `rate_limit_exceeded`, `csrf_violation`, `admin_access_denied`, `token_revoked`, `token_exchange_failure`, `oauth_callback_error`) and convenience functions (`LogAuthFailure`, `LogRateLimitExceeded`, `LogCSRFViolation`, `LogAdminAccessDenied`, `LogTokenRevoked`, `LogTokenExchangeFailure`, `LogOAuthCallbackError`).
+- Updated `internal/middleware/context.go` ✓ — Generates a unique UUID request ID per request (accepting `X-Request-ID` from a trusted upstream proxy when present); stores it in the Gin context as `request_id` and echoes it in the `X-Request-ID` response header for end-to-end correlation.
+- Updated `internal/middleware/auth.go` ✓ — Logs `auth_failure` for missing token, malformed `Authorization` header, invalid/expired JWT, and revoked token.
+- Updated `internal/middleware/admin.go` ✓ — Logs `admin_access_denied` when an authenticated non-admin user attempts to reach an admin-only route.
+- Updated `internal/middleware/ratelimit.go` ✓ — Logs `rate_limit_exceeded` (with user_id when authenticated, IP otherwise) for both `RateLimitByIP` and `RateLimitByUser`.
+- Updated `internal/middleware/csrf.go` ✓ — Logs `csrf_violation` (including method and path) when the CSRF double-submit check fails.
+- Updated `internal/transport/http/api/v1/handler/auth_handler.go` ✓ — Logs `token_exchange_failure` on every failed authorization-code exchange; logs `token_revoked` on successful logout.
+- Updated `internal/transport/http/web/handler/auth_handler.go` ✓ — Logs `oauth_callback_error` for provider-returned errors and state-mismatch (CSRF) detected during callback.
+
+**Notes:**
+- All security events are written as JSON to `os.Stderr` at `WARN` level via a singleton `log/slog` logger. Each line includes `time` (RFC3339Nano, automatic), `level`, `msg="security_event"`, `event`, `ip`, `request_id`, and `user_id` (when the identity is known).
+- Tokens, secrets, authorization codes, and provider credentials are intentionally excluded from all log lines.
+- `request_id` is generated in `ContextMiddleware` so it is consistently available across middleware layers and handlers via `c.GetString("request_id")`.
 
 ### 6.6 Task 5.6: Security Audit
 
@@ -1315,7 +1326,7 @@ WHERE id = $1;
 - [x] CORS configured correctly
 - [x] CSRF protection complete
 - [x] Security headers applied
-- [ ] Security logging implemented
+- [x] Security logging implemented
 - [ ] Security audit completed
 - [ ] Penetration testing done
 - [ ] All critical/high issues fixed

@@ -11,6 +11,7 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -108,6 +109,7 @@ func (h *WebHandler) Callback(c *gin.Context) {
 	if oauthErr := c.Query("error"); oauthErr != "" {
 		desc := c.Query("error_description")
 		log.Printf("Callback: provider returned error=%q description=%q", oauthErr, desc)
+		util.LogOAuthCallbackError(c.ClientIP(), c.GetString("request_id"), clientID.String(), providerName, oauthErr)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             oauthErr,
 			"error_description": desc,
@@ -140,6 +142,7 @@ func (h *WebHandler) Callback(c *gin.Context) {
 
 	// Validate state (CSRF protection).
 	if state != session.State {
+		util.LogOAuthCallbackError(c.ClientIP(), c.GetString("request_id"), clientID.String(), providerName, "state mismatch (CSRF)")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "state mismatch; possible CSRF attack"})
 		return
 	}

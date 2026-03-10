@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/SamuelWang/goauth-server/internal/service/user"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -37,6 +38,7 @@ func AdminMiddleware(userService *user.Service) gin.HandlerFunc {
 		}
 
 		if !isAdmin {
+			util.LogAdminAccessDenied(c.ClientIP(), c.GetString("request_id"), rawID.(string), c.Request.URL.Path)
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 			c.Abort()
 			return

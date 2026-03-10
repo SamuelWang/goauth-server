@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -76,6 +77,8 @@ func CSRFMiddleware() gin.HandlerFunc {
 		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 			headerToken := c.GetHeader(CSRFHeaderName)
 			if headerToken == "" || !secureCompare(headerToken, cookieToken) {
+				userID := c.GetString("user_id")
+				util.LogCSRFViolation(c.ClientIP(), c.GetString("request_id"), userID, c.Request.Method, c.Request.URL.Path)
 				c.JSON(http.StatusForbidden, gin.H{
 					"error":             "forbidden",
 					"error_description": "invalid or missing CSRF token",

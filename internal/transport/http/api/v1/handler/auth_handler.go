@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -73,6 +74,7 @@ func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
 		req.RedirectURI,
 	)
 	if err != nil {
+		util.LogTokenExchangeFailure(c.ClientIP(), c.GetString("request_id"), req.ClientID, err.Error())
 		handleTokenExchangeError(c, err)
 		return
 	}
@@ -123,6 +125,9 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 				if !errors.Is(err, auth.ErrTokenNotFound) {
 					log.Printf("Logout: failed to revoke token: %v", err)
 				}
+			} else {
+				userID := c.GetString("user_id")
+				util.LogTokenRevoked(c.ClientIP(), c.GetString("request_id"), userID)
 			}
 		}
 	}
