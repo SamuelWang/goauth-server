@@ -1203,13 +1203,20 @@ WHERE id = $1;
 4. Configure CSP appropriately
 
 **Acceptance Criteria:**
-- [ ] All security headers set
-- [ ] CSP configured for application needs
-- [ ] HSTS enabled for production
-- [ ] Headers verified in responses
+- [x] All security headers set
+- [x] CSP configured for application needs
+- [x] HSTS enabled for production
+- [x] Headers verified in responses
 
 **Deliverables:**
-- Security headers middleware
+- `internal/middleware/security.go` ✓ — `SecurityHeadersMiddleware(env string)` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` on every response. `Strict-Transport-Security: max-age=31536000; includeSubDomains` is added only when `env == "production"` to avoid permanently locking browsers into HTTPS on plain-HTTP dev/staging servers.
+- `internal/middleware/security_test.go` ✓ — 9 tests: each header asserted individually, HSTS present in production, HSTS absent in development and staging, all headers applied to POST requests, and constant value assertions.
+- Updated `internal/app/auth-server/server.go` ✓ — `r.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))` registered globally after CORS so security headers are present on every response including CORS preflight 204s.
+
+**Notes:**
+- CSP uses `default-src 'none'; frame-ancestors 'none'` — the strictest baseline suitable for a pure-API / OAuth server that does not serve scripts, styles, images, or fonts via browser rendering. `frame-ancestors 'none'` reinforces `X-Frame-Options: DENY`.
+- HSTS is deliberately restricted to `env == "production"` because sending it over HTTP (as used in dev/staging) would cause browsers to refuse plain-HTTP connections permanently.
+- `SecurityHeadersMiddleware` is registered after `CORSMiddleware` in `server.go` so CORS preflight OPTIONS responses also carry the security headers.
 
 ### 6.5 Task 5.5: Implement Security Event Logging
 
@@ -1307,7 +1314,7 @@ WHERE id = $1;
 - [x] Rate limiting implemented and tested
 - [x] CORS configured correctly
 - [x] CSRF protection complete
-- [ ] Security headers applied
+- [x] Security headers applied
 - [ ] Security logging implemented
 - [ ] Security audit completed
 - [ ] Penetration testing done

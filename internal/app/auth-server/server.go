@@ -61,6 +61,11 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	// route-group middleware (auth, rate limiting, etc.) intercepts them.
 	r.Use(middleware.CORSMiddleware(cfg.Security.CORSAllowedOrigins, cfg.Server.Env))
 
+	// Apply defensive HTTP security headers globally (X-Content-Type-Options,
+	// X-Frame-Options, X-XSS-Protection, Content-Security-Policy, and HSTS in
+	// production).
+	r.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))
+
 	// Register routes
 	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService)
 	web.RegisterRoutes(r, cfg, authService)
