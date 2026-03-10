@@ -1168,14 +1168,23 @@ WHERE id = $1;
 5. Add tests
 
 **Acceptance Criteria:**
-- [ ] CSRF tokens generated securely
-- [ ] Validation works for POST/PATCH/DELETE
-- [ ] OAuth flow uses state parameter
-- [ ] Tests verify protection works
+- [x] CSRF tokens generated securely
+- [x] Validation works for POST/PATCH/DELETE
+- [x] OAuth flow uses state parameter
+- [x] Tests verify protection works
 
 **Deliverables:**
-- CSRF middleware
-- Tests
+- `internal/middleware/csrf.go` ✓ — `CSRFMiddleware()` implements the double-submit cookie pattern. Generates a 32-byte cryptographically random token and sets it as a `csrf_token` cookie (HttpOnly=false, SameSite=Lax so JS can read it). On POST/PUT/PATCH/DELETE validates that the `X-CSRF-Token` header matches the cookie via constant-time (`secureCompare`) comparison. The `Secure` flag is derived from the `cookie_secure` value set by `ContextMiddleware`. Returns HTTP 403 on mismatch.
+- `internal/middleware/csrf_test.go` ✓ — 16 tests: cookie issuance on GET, HttpOnly=false, Secure flag in production/development, cookie reuse on subsequent requests, valid POST/PATCH/DELETE pass, missing header returns 403, mismatched header returns 403, DELETE without cookie returns 403, GET never blocked, and `secureCompare` unit tests (equal, unequal, different lengths, empty strings).
+- `internal/transport/http/api/v1/router.go` ✓ — `CSRFMiddleware()` applied to: protected auth group (logout/me), clients admin group, client-scoped providers admin group, users admin group, sessions admin group. Public routes (token exchange, provider listing, OAuth web flow) remain exempt — token exchange uses `client_secret` as the CSRF defence; OAuth callbacks use the state parameter.
+- `internal/transport/http/api/v1/handler/testhelpers_test.go` ✓ — `doAuthRequest` updated to include the `csrf_token` cookie and `X-CSRF-Token` header automatically for state-changing methods (POST/PATCH/DELETE/PUT) so all 79 existing handler tests continue to pass.
+
+**Notes:**
+- `secureCompare` performs a constant-time XOR-based comparison to prevent timing-side-channel attacks on the token validation.
+- The `csrf_token` cookie intentionally has `HttpOnly=false` — this is required by the double-submit pattern so that JavaScript on the same origin can read the token and echo it in the request header.
+- `SameSite=Lax` is applied to the cookie, providing a complementary layer of CSRF protection for top-level navigations.
+- OAuth callbacks and the token exchange endpoint are deliberately excluded from CSRF enforcement: callbacks are GET requests (not state-changing) and use the `state` parameter for CSRF; the token exchange relies on `client_secret` which cannot be forged cross-site.
+- The `Secure` flag on the cookie is driven by `ContextMiddleware`'s `cookie_secure` context value, which is `true` when `ENV=production` or `SCHEME=https`.
 
 ### 6.4 Task 5.4: Implement Security Headers
 
@@ -1297,7 +1306,7 @@ WHERE id = $1;
 
 - [x] Rate limiting implemented and tested
 - [x] CORS configured correctly
-- [ ] CSRF protection complete
+- [x] CSRF protection complete
 - [ ] Security headers applied
 - [ ] Security logging implemented
 - [ ] Security audit completed

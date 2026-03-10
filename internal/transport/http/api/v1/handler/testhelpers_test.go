@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -236,7 +237,14 @@ func (e *testEnv) doRequest(method, path string, body interface{}) *httptest.Res
 	return w
 }
 
+// testCSRFToken is a fixed valid CSRF token used in tests for state-changing
+// requests.  Both the csrf_token cookie and the X-CSRF-Token header are set
+// to this value so the double-submit check passes.
+const testCSRFToken = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+
 // doAuthRequest performs an HTTP request with a Bearer token.
+// For state-changing methods (POST, PATCH, DELETE) it also adds the CSRF
+// cookie and X-CSRF-Token header so that the CSRFMiddleware is satisfied.
 func (e *testEnv) doAuthRequest(method, path string, body interface{}, token string) *httptest.ResponseRecorder {
 	var reqBody *bytes.Buffer
 	if body != nil {
@@ -251,6 +259,14 @@ func (e *testEnv) doAuthRequest(method, path string, body interface{}, token str
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+
+	// State-changing requests require a valid CSRF double-submit token.
+	switch method {
+	case "POST", "PATCH", "PUT", "DELETE":
+		req.AddCookie(&http.Cookie{Name: middleware.CSRFCookieName, Value: testCSRFToken})
+		req.Header.Set(middleware.CSRFHeaderName, testCSRFToken)
+	}
+
 	w := httptest.NewRecorder()
 	e.router.ServeHTTP(w, req)
 	return w

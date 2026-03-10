@@ -27,7 +27,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 
 	// Protected auth routes (require a valid bearer token)
 	protectedAuth := r.Group("/auth")
-	protectedAuth.Use(middleware.AuthMiddleware(authService))
+	protectedAuth.Use(middleware.AuthMiddleware(authService), middleware.CSRFMiddleware())
 	{
 		protectedAuth.POST("/logout", h.Logout)
 		protectedAuth.GET("/me", h.GetCurrentUser)
@@ -36,7 +36,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 	// Client management routes (admin only)
 	// Admin endpoints: 30 requests per minute per authenticated user.
 	clientsGroup := r.Group("/clients")
-	clientsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin))
+	clientsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
 	{
 		clientsGroup.GET("", h.ListClients)
 		clientsGroup.GET("/:client_id", h.GetClient)
@@ -48,7 +48,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 
 	// Client-scoped provider routes (admin only)
 	clientProviderGroup := r.Group("/clients/:client_id/providers")
-	clientProviderGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin))
+	clientProviderGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
 	{
 		clientProviderGroup.GET("", h.ListProviders)
 		clientProviderGroup.GET("/:id", h.GetProvider)
@@ -59,7 +59,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 
 	// User management routes (admin only)
 	usersGroup := r.Group("/users")
-	usersGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin))
+	usersGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
 	{
 		usersGroup.GET("", h.ListUsers)
 		usersGroup.PATCH("/:id", h.UpdateUserStatus)
@@ -67,7 +67,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 
 	// Session management routes (admin only)
 	sessionsGroup := r.Group("/sessions")
-	sessionsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin))
+	sessionsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
 	{
 		sessionsGroup.GET("/codes", h.ListAuthorizationCodes)
 		sessionsGroup.DELETE("/codes/:id", h.RevokeAuthorizationCode)
