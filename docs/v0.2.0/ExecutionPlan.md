@@ -1140,16 +1140,17 @@ WHERE id = $1;
 5. Add tests
 
 **Acceptance Criteria:**
-- [ ] Allowed origins configurable
-- [ ] Preflight requests handled
-- [ ] Credentials supported for allowed origins
-- [ ] Wildcard not used in production
-- [ ] Tests verify CORS headers
+- [x] Allowed origins configurable
+- [x] Preflight requests handled
+- [x] Credentials supported for allowed origins
+- [x] Wildcard not used in production
+- [x] Tests verify CORS headers
 
 **Deliverables:**
-- CORS middleware
-- Configuration
-- Tests
+- `internal/middleware/cors.go` ✓ — `CORSMiddleware(allowedOrigins []string, env string)` applied globally in `server.go`; reflects exact origin + `Access-Control-Allow-Credentials: true` for listed origins; falls back to `*` (without credentials) in non-production when no list is configured; production with no list blocks all cross-origin requests.
+- `internal/middleware/cors_test.go` ✓ — 13 tests covering: non-cross-origin pass-through, dev wildcard, production block with no origins, allowlist exact-match + case-insensitivity, disallowed origin in prod and dev, preflight 204/403, Vary header, expose headers.
+- Updated `internal/config/config.go` ✓ — `SecurityConfig.CORSAllowedOrigins []string` parsed from comma-separated `CORS_ALLOWED_ORIGINS` env var via new `getEnvAsStringSlice` helper.
+- Updated `internal/app/auth-server/server.go` ✓ — `r.Use(middleware.CORSMiddleware(...))` registered before all route groups so OPTIONS preflight requests are handled before auth/rate-limit middleware.
 
 ### 6.3 Task 5.3: Enhance CSRF Protection
 
@@ -1295,7 +1296,7 @@ WHERE id = $1;
 ### Phase 5 Completion Checklist
 
 - [x] Rate limiting implemented and tested
-- [ ] CORS configured correctly
+- [x] CORS configured correctly
 - [ ] CSRF protection complete
 - [ ] Security headers applied
 - [ ] Security logging implemented

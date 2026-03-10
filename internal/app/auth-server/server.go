@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/SamuelWang/goauth-server/internal/config"
+	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
@@ -55,6 +56,10 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 
 	// Create Gin router
 	r := gin.New()
+
+	// Apply CORS globally so preflight OPTIONS requests are handled before any
+	// route-group middleware (auth, rate limiting, etc.) intercepts them.
+	r.Use(middleware.CORSMiddleware(cfg.Security.CORSAllowedOrigins, cfg.Server.Env))
 
 	// Register routes
 	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService)

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -61,6 +62,13 @@ type SecurityConfig struct {
 	// OAuth session cookies. It must be kept separate from ProviderEncryptionKey
 	// to satisfy the key-separation principle.
 	SessionSigningKey string
+
+	// CORSAllowedOrigins is a list of origins permitted to make cross-origin
+	// requests to the server. Parsed from the CORS_ALLOWED_ORIGINS environment
+	// variable (comma-separated, e.g. "https://app.example.com,https://admin.example.com").
+	// In production an empty list means no cross-origin requests are allowed.
+	// In non-production environments an empty list enables the wildcard (*) fallback.
+	CORSAllowedOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -103,6 +111,7 @@ func Load() (*Config, error) {
 		Security: SecurityConfig{
 			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
 			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
+			CORSAllowedOrigins:    getEnvAsStringSlice("CORS_ALLOWED_ORIGINS"),
 		},
 	}
 
@@ -165,4 +174,22 @@ func getEnvAsInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return value
+}
+
+// getEnvAsStringSlice splits a comma-separated environment variable into a
+// slice of trimmed, non-empty strings.  Returns nil when the variable is unset
+// or blank.
+func getEnvAsStringSlice(key string) []string {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
