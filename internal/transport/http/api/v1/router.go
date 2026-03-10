@@ -5,14 +5,15 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
+	"github.com/SamuelWang/goauth-server/internal/service/session"
 	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api/v1/handler"
 
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service) {
-	h := handler.New(authService, userService, providerService, clientService)
+func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service) {
+	h := handler.New(authService, userService, providerService, clientService, sessionService)
 
 	// Public auth routes
 	publicAuth := r.Group("/auth")
@@ -60,5 +61,15 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 	{
 		usersGroup.GET("", h.ListUsers)
 		usersGroup.PATCH("/:id", h.UpdateUserStatus)
+	}
+
+	// Session management routes (admin only)
+	sessionsGroup := r.Group("/sessions")
+	sessionsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService))
+	{
+		sessionsGroup.GET("/codes", h.ListAuthorizationCodes)
+		sessionsGroup.DELETE("/codes/:id", h.RevokeAuthorizationCode)
+		sessionsGroup.GET("/tokens", h.ListAccessTokens)
+		sessionsGroup.DELETE("/tokens/:id", h.RevokeAccessToken)
 	}
 }

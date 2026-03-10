@@ -1,6 +1,8 @@
 package handler
 
-import "time"
+import (
+	"time"
+)
 
 // --- Client management ---
 
@@ -171,4 +173,44 @@ type ListUsersResponse struct {
 // UpdateUserStatusRequest is the request body for PATCH /api/v1/users/:id.
 type UpdateUserStatusRequest struct {
 	IsActive bool `json:"is_active"`
+}
+
+// --- Session management ---
+
+// AuthorizationCodeResponse is the authorization code object returned in API responses.
+type AuthorizationCodeResponse struct {
+	ID          string  `json:"id"`
+	ClientID    string  `json:"client_id"`
+	UserID      string  `json:"user_id"`
+	ProviderID  string  `json:"provider_id"`
+	RedirectURI string  `json:"redirect_uri"`
+	Scope       *string `json:"scope,omitempty"`
+	ExpiresAt   string  `json:"expires_at"`
+	UsedAt      *string `json:"used_at,omitempty"`
+	IsRevoked   bool    `json:"is_revoked"`
+	CreatedAt   string  `json:"created_at"`
+}
+
+// ListAuthorizationCodesResponse wraps a paginated list of authorization codes.
+type ListAuthorizationCodesResponse struct {
+	Codes []AuthorizationCodeResponse `json:"codes"`
+	Total int64                       `json:"total"`
+}
+
+// AccessTokenResponse is the access token object returned in API responses.
+// The token hash is intentionally excluded.
+type AccessTokenResponse struct {
+	ID        string  `json:"id"`
+	ClientID  string  `json:"client_id"`
+	UserID    string  `json:"user_id"`
+	Scope     *string `json:"scope,omitempty"`
+	ExpiresAt string  `json:"expires_at"`
+	IsRevoked bool    `json:"is_revoked"`
+	CreatedAt string  `json:"created_at"`
+}
+
+// ListAccessTokensResponse wraps a paginated list of access tokens.
+type ListAccessTokensResponse struct {
+	Tokens []AccessTokenResponse `json:"tokens"`
+	Total  int64                 `json:"total"`
 }

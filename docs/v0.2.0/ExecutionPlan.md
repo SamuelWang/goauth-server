@@ -957,14 +957,24 @@ WHERE id = $1;
 5. Add to router
 
 **Acceptance Criteria:**
-- [ ] Pagination works
-- [ ] Filters work
-- [ ] Revocation works immediately
-- [ ] Admin authorization enforced
+- [x] Pagination works
+- [x] Filters work
+- [x] Revocation works immediately
+- [x] Admin authorization enforced
 
 **Deliverables:**
-- Session handler
-- Session DTOs
+- `internal/transport/http/api/v1/handler/session_handler.go` ✓
+- Updated `dto.go` with `AuthorizationCodeResponse`, `ListAuthorizationCodesResponse`, `AccessTokenResponse`, `ListAccessTokensResponse` ✓
+- Updated `handler.go` to include `sessionService` dependency and `formatTimePtr` helper ✓
+- Updated `v1/router.go` with session management routes ✓
+- Updated `api/router.go` and `server.go` to wire `session.Service` ✓
+
+**Notes:**
+- `GET /api/v1/sessions/codes` and `GET /api/v1/sessions/tokens` support `limit`, `offset`, `client_id` (UUID), `user_id` (UUID), and `is_revoked` (bool) query parameters.
+- `DELETE /api/v1/sessions/codes/:id` and `DELETE /api/v1/sessions/tokens/:id` return HTTP 204 No Content on success and 404 when the resource is not found.
+- Both routes are protected by `AuthMiddleware` + `AdminMiddleware`.
+- Token hash is intentionally excluded from `AccessTokenResponse` to avoid leaking sensitive data.
+- `formatTimePtr` helper added to `handler.go` to format nullable `*time.Time` fields as RFC3339 string pointers.
 
 ### 5.7 Task 4.7: Implement Authentication Middleware
 
@@ -1047,7 +1057,7 @@ WHERE id = $1;
 - [x] All API endpoints implemented (Task 4.1 ✓, Task 4.2 ✓, Task 4.4 ✓)
 - [x] Web endpoints functional (Task 4.3 ✓)
 - [x] User management endpoints implemented (Task 4.5 ✓)
-- [ ] Remaining endpoints implemented (Task 4.6 sessions)
+- [x] Remaining endpoints implemented (Task 4.6 ✓ sessions)
 - [ ] Middleware implemented and tested
 - [ ] DTOs defined for all endpoints
 - [ ] Input validation comprehensive
