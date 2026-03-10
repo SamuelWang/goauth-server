@@ -286,6 +286,22 @@ func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
 	return s.RevokeToken(ctx, hashToken(rawToken))
 }
 
+// IsTokenRevoked reports whether the raw access token has been revoked or is
+// absent from the database. It should be called after JWT signature/expiry
+// validation so the database is only consulted for cryptographically valid tokens.
+// If the token record is not found in the database it is treated as invalid
+// and (true, nil) is returned.
+func (s *Service) IsTokenRevoked(ctx context.Context, rawToken string) (bool, error) {
+	record, err := s.repo.GetAccessToken(ctx, hashToken(rawToken))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true, nil
+		}
+		return false, fmt.Errorf("looking up access token: %w", err)
+	}
+	return record.IsRevoked != nil && *record.IsRevoked, nil
+}
+
 // upsertUser looks up a user by their OAuth provider ID. If the user exists,
 // it updates the last-login timestamp; otherwise it creates a new account.
 func (s *Service) upsertUser(ctx context.Context, providerName string, info *ProviderUserInfo) (repository.User, error) {

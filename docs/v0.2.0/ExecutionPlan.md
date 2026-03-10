@@ -996,17 +996,24 @@ WHERE id = $1;
 4. Add middleware tests
 
 **Acceptance Criteria:**
-- [ ] JWT signature verification works
-- [ ] Expiration checked
-- [ ] Revoked tokens rejected
-- [ ] User context populated
-- [ ] Admin middleware enforces authorization
-- [ ] Tests cover all scenarios
+- [x] JWT signature verification works
+- [x] Expiration checked
+- [x] Revoked tokens rejected
+- [x] User context populated
+- [x] Admin middleware enforces authorization
+- [x] Tests cover all scenarios
 
 **Deliverables:**
-- Updated auth middleware
-- Admin middleware
-- Middleware tests
+- Updated auth middleware ✓
+- Admin middleware ✓
+- Middleware tests ✓
+
+**Notes:**
+- `IsTokenRevoked(ctx, rawToken string)` was added to `internal/service/auth/authorization.go`. It hashes the raw token with SHA-256 and looks it up via `GetAccessToken`; if the record is absent (pgx.ErrNoRows) the token is treated as invalid (returns `true, nil`).
+- `AuthMiddleware` now calls `IsTokenRevoked` after JWT validation and returns HTTP 401 for revoked/absent tokens and HTTP 500 for unexpected database errors.
+- `internal/middleware/auth_test.go` was rewritten with a `testAuthHelper` type that holds a real `auth.Service` backed by a `*mocks.MockQuerier` and the ECDSA private key used to sign tokens. Tests cover: missing token (no cookie/header), malformed Authorization header, invalid JWT, expired JWT, token not found in DB, revoked token, DB error during revocation check, valid token via cookie, valid token via Bearer header, header-over-cookie precedence, and request-chain abort on unauthorized.
+- `internal/middleware/admin_test.go` was created covering: no user_id in context, invalid (non-UUID) user_id, non-admin user (403), admin user (200), user not found in DB (500), and DB error (500).
+- Total: 22 middleware tests, all passing.
 
 ### 5.8 Task 4.8: Write API Integration Tests
 
@@ -1058,7 +1065,7 @@ WHERE id = $1;
 - [x] Web endpoints functional (Task 4.3 ✓)
 - [x] User management endpoints implemented (Task 4.5 ✓)
 - [x] Remaining endpoints implemented (Task 4.6 ✓ sessions)
-- [ ] Middleware implemented and tested
+- [x] Middleware implemented and tested (Task 4.7 ✓)
 - [ ] DTOs defined for all endpoints
 - [ ] Input validation comprehensive
 - [ ] Error handling consistent

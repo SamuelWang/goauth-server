@@ -45,6 +45,20 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 			return
 		}
 
+		// Check whether the token has been revoked in the database.
+		isRevoked, err := authService.IsTokenRevoked(c.Request.Context(), token)
+		if err != nil {
+			log.Printf("AuthMiddleware: revocation check failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			c.Abort()
+			return
+		}
+		if isRevoked {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - token has been revoked"})
+			c.Abort()
+			return
+		}
+
 		// Store the raw token so handlers can revoke it (e.g. logout).
 		c.Set("raw_token", token)
 		c.Set("user_id", claims.UserID)
