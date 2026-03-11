@@ -92,6 +92,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	sessionSvc := session.New(mockQ)
 
 	router := gin.New()
+	router.Use(middleware.MaxBodySizeMiddleware())
+	router.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))
 	apiV1 := router.Group("/api/v1")
 	apiV1.Use(middleware.ContextMiddleware(cfg))
 	v1.RegisterRoutes(apiV1, authSvc, userSvc, providerSvc, clientSvc, sessionSvc)

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/middleware"
@@ -61,6 +62,10 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	// route-group middleware (auth, rate limiting, etc.) intercepts them.
 	r.Use(middleware.CORSMiddleware(cfg.Security.CORSAllowedOrigins, cfg.Server.Env))
 
+	// Limit request body size to 1 MiB to prevent memory-exhaustion DoS before
+	// any JSON binding occurs.
+	r.Use(middleware.MaxBodySizeMiddleware())
+
 	// Apply defensive HTTP security headers globally (X-Content-Type-Options,
 	// X-Frame-Options, X-XSS-Protection, Content-Security-Policy, and HSTS in
 	// production).
@@ -74,8 +79,9 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	s := &Server{
 		router: r,
 		srv: &http.Server{
-			Addr:    ":" + cfg.Server.Port,
-			Handler: r,
+			Addr:              ":" + cfg.Server.Port,
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second, // mitigate Slowloris (G112)
 		},
 	}
 

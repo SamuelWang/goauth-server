@@ -1,8 +1,15 @@
 package middleware
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
+
+// maxRequestBodyBytes is the maximum number of bytes accepted in a single API
+// request body.  Requests exceeding this limit are rejected with 413 Payload
+// Too Large before any JSON binding occurs, preventing memory-exhaustion DoS.
+const maxRequestBodyBytes = 1 << 20 // 1 MiB
 
 // Standard security header values applied to every response.
 const (
@@ -64,6 +71,24 @@ func SecurityHeadersMiddleware(env string) gin.HandlerFunc {
 			c.Header("Strict-Transport-Security", hstsValue)
 		}
 
+		c.Next()
+	}
+}
+
+// MaxBodySizeMiddleware rejects requests whose body exceeds maxRequestBodyBytes
+// (1 MiB) with HTTP 413 Payload Too Large.  This prevents memory-exhaustion DoS
+// attacks via crafted large request bodies before any JSON binding occurs.
+func MaxBodySizeMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.ContentLength > maxRequestBodyBytes {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"error": "request body too large",
+			})
+			c.Abort()
+			return
+		}
+		// Wrap the body reader so reads beyond the limit also fail gracefully.
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
 		c.Next()
 	}
 }

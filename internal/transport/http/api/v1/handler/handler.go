@@ -89,5 +89,6 @@ func parsePaginationParams(c *gin.Context) (limit int32, offset int32, ok bool) 
 		return 0, 0, false
 	}
 
-	return int32(l), int32(o), true
+	// l is in [1,100] and o is >= 0, both fit safely in int32.
+	return int32(l), int32(o), true // #nosec G115 G109 -- bounds validated above: l ∈ [1,100], o ≥ 0
 }
