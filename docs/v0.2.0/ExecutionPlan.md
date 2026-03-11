@@ -1470,15 +1470,23 @@ WHERE id = $1;
 4. Explain client-scoped provider architecture
 
 **Acceptance Criteria:**
-- [ ] Setup instructions complete
-- [ ] All admin tasks documented
-- [ ] Client-provider relationship explained clearly
-- [ ] Provider isolation per client documented
-- [ ] Security guidelines included
-- [ ] Troubleshooting section helpful
+- [x] Setup instructions complete
+- [x] All admin tasks documented
+- [x] Client-provider relationship explained clearly
+- [x] Provider isolation per client documented
+- [x] Security guidelines included
+- [x] Troubleshooting section helpful
 
 **Deliverables:**
-- `docs/v0.2.0/AdministratorGuide.md`
+- `docs/v0.2.0/AdministratorGuide.md` ✓
+
+**Notes:**
+- Covers full environment variable reference, key generation, database setup and migration order.
+- Documents the bootstrap flow for creating the first admin user via direct SQL (no built-in bootstrap endpoint).
+- All CRUD examples for clients, providers, users, and sessions include `curl` samples with required `Authorization` and `X-CSRF-Token` headers.
+- Common provider configurations (Google, GitHub, Microsoft Entra ID) included as collapsible examples.
+- Production deployment checklist included in the security section.
+- Troubleshooting covers the most common failure modes: missing keys, 401/403 errors, CSRF errors, provider cross-client 404, invalid_grant causes, and provider re-encryption after key rotation.
 
 ### 7.3 Task 6.3: Create Client Integration Guide
 
@@ -1700,8 +1708,8 @@ WHERE id = $1;
 
 ### Phase 6 Completion Checklist
 
-- [ ] API documentation complete (OpenAPI)
-- [ ] Administrator guide written
+- [x] API documentation complete (OpenAPI) — Task 6.1 ✓
+- [x] Administrator guide written — Task 6.2 ✓
 - [ ] Client integration guide written
 - [ ] Dockerfile created and tested
 - [ ] Docker Compose configured
