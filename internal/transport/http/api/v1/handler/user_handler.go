@@ -42,8 +42,10 @@ func handleUserError(c *gin.Context, err error) {
 // ListUsers handles GET /api/v1/users
 // Returns a paginated list of users (admin only).
 func (h *ApiV1Handler) ListUsers(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, offset, ok := parsePaginationParams(c)
+	if !ok {
+		return
+	}
 
 	var isActive *bool
 	if v := c.Query("is_active"); v != "" {
@@ -68,8 +70,8 @@ func (h *ApiV1Handler) ListUsers(c *gin.Context) {
 	result, err := h.userService.ListUsers(c.Request.Context(), user.ListUsersParams{
 		IsActive: isActive,
 		IsAdmin:  isAdmin,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		Limit:    limit,
+		Offset:   offset,
 	})
 	if err != nil {
 		log.Printf("ListUsers: %v", err)

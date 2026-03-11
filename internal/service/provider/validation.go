@@ -16,7 +16,7 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-func validateCreateDTO(dto CreateProviderDTO) error {
+func validateCreateDTO(dto CreateProviderDTO, env string) error {
 	if strings.TrimSpace(dto.Name) == "" {
 		return &ValidationError{Field: "name", Message: "required"}
 	}
@@ -29,13 +29,13 @@ func validateCreateDTO(dto CreateProviderDTO) error {
 	if strings.TrimSpace(dto.ProviderClientSecret) == "" {
 		return &ValidationError{Field: "provider_client_secret", Message: "required"}
 	}
-	if err := validateURL("auth_url", dto.AuthURL); err != nil {
+	if err := validateURL("auth_url", dto.AuthURL, env); err != nil {
 		return err
 	}
-	if err := validateURL("token_url", dto.TokenURL); err != nil {
+	if err := validateURL("token_url", dto.TokenURL, env); err != nil {
 		return err
 	}
-	if err := validateURL("user_info_url", dto.UserInfoURL); err != nil {
+	if err := validateURL("user_info_url", dto.UserInfoURL, env); err != nil {
 		return err
 	}
 	if len(dto.Scopes) == 0 {
@@ -44,7 +44,7 @@ func validateCreateDTO(dto CreateProviderDTO) error {
 	return nil
 }
 
-func validateUpdateDTO(dto UpdateProviderDTO) error {
+func validateUpdateDTO(dto UpdateProviderDTO, env string) error {
 	if strings.TrimSpace(dto.DisplayName) == "" {
 		return &ValidationError{Field: "display_name", Message: "required"}
 	}
@@ -52,13 +52,13 @@ func validateUpdateDTO(dto UpdateProviderDTO) error {
 		return &ValidationError{Field: "provider_client_id", Message: "required"}
 	}
 	// ProviderClientSecret is optional on update: empty means retain the existing secret.
-	if err := validateURL("auth_url", dto.AuthURL); err != nil {
+	if err := validateURL("auth_url", dto.AuthURL, env); err != nil {
 		return err
 	}
-	if err := validateURL("token_url", dto.TokenURL); err != nil {
+	if err := validateURL("token_url", dto.TokenURL, env); err != nil {
 		return err
 	}
-	if err := validateURL("user_info_url", dto.UserInfoURL); err != nil {
+	if err := validateURL("user_info_url", dto.UserInfoURL, env); err != nil {
 		return err
 	}
 	if len(dto.Scopes) == 0 {
@@ -68,7 +68,9 @@ func validateUpdateDTO(dto UpdateProviderDTO) error {
 }
 
 // validateURL checks that rawURL is a well-formed http or https URL.
-func validateURL(field, rawURL string) error {
+// In production, HTTPS is required to protect OAuth credentials and user info
+// in transit (loopback addresses are still permitted over HTTP for testing).
+func validateURL(field, rawURL, env string) error {
 	if strings.TrimSpace(rawURL) == "" {
 		return &ValidationError{Field: field, Message: "required"}
 	}
@@ -78,6 +80,15 @@ func validateURL(field, rawURL string) error {
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return &ValidationError{Field: field, Message: "must use http or https scheme"}
+	}
+	// In production, require HTTPS unless the host is a loopback address.
+	// OAuth token and user-info endpoints handle sensitive credentials; plain
+	// HTTP in production would expose them in transit.
+	if env == "production" && parsed.Scheme == "http" {
+		host := parsed.Hostname()
+		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+			return &ValidationError{Field: field, Message: fmt.Sprintf("must use HTTPS in production: %q", rawURL)}
+		}
 	}
 	return nil
 }

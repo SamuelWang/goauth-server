@@ -74,17 +74,22 @@ type UpdateProviderDTO struct {
 type Service struct {
 	repo          repository.Querier
 	encryptionKey []byte
+	// env is consulted to enforce HTTPS for provider OAuth endpoint URLs in
+	// production (matching the behaviour of the redirect URI validator).
+	env string
 }
 
 // New creates a new provider Service.
 // encryptionKey must be exactly 32 bytes (required for AES-256-GCM).
-func New(repo repository.Querier, encryptionKey []byte) (*Service, error) {
+// env should match config.Server.Env (e.g. "production", "development").
+func New(repo repository.Querier, encryptionKey []byte, env string) (*Service, error) {
 	if len(encryptionKey) != 32 {
 		return nil, fmt.Errorf("provider encryption key must be exactly 32 bytes, got %d", len(encryptionKey))
 	}
 	return &Service{
 		repo:          repo,
 		encryptionKey: encryptionKey,
+		env:           env,
 	}, nil
 }
 
@@ -188,7 +193,7 @@ func (s *Service) GetProviderWithSecretByClientAndName(ctx context.Context, clie
 
 // CreateProvider creates a new OAuth provider for a client, encrypting the client secret at rest.
 func (s *Service) CreateProvider(ctx context.Context, clientID uuid.UUID, dto CreateProviderDTO) (*OAuthProvider, error) {
-	if err := validateCreateDTO(dto); err != nil {
+	if err := validateCreateDTO(dto, s.env); err != nil {
 		return nil, err
 	}
 
@@ -224,7 +229,7 @@ func (s *Service) CreateProvider(ctx context.Context, clientID uuid.UUID, dto Cr
 // UpdateProvider updates a provider after validating that it belongs to clientID.
 // If dto.ProviderClientSecret is empty, the existing encrypted secret is retained.
 func (s *Service) UpdateProvider(ctx context.Context, id uuid.UUID, clientID uuid.UUID, dto UpdateProviderDTO) (*OAuthProvider, error) {
-	if err := validateUpdateDTO(dto); err != nil {
+	if err := validateUpdateDTO(dto, s.env); err != nil {
 		return nil, err
 	}
 

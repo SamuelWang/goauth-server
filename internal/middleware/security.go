@@ -29,6 +29,12 @@ const (
 	// The server does not serve scripts, styles, images, or fonts from
 	// browser contexts, so denying everything is the correct baseline.
 	cspValue = "default-src 'none'; frame-ancestors 'none'"
+
+	// referrerPolicyValue instructs browsers not to send a Referer header,
+	// preventing sensitive path or query-string information (including
+	// authorization codes that may appear in redirect URIs) from being
+	// leaked to third-party origins via the Referer header.
+	referrerPolicyValue = "no-referrer"
 )
 
 // SecurityHeadersMiddleware sets defensive HTTP security headers on every
@@ -39,6 +45,7 @@ const (
 //   - X-Frame-Options: DENY
 //   - X-XSS-Protection: 1; mode=block
 //   - Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+//   - Referrer-Policy: no-referrer
 //
 // Headers set only in production (where HTTPS is expected):
 //   - Strict-Transport-Security: max-age=31536000; includeSubDomains
@@ -48,6 +55,7 @@ func SecurityHeadersMiddleware(env string) gin.HandlerFunc {
 		c.Header("X-Frame-Options", xfoValue)
 		c.Header("X-XSS-Protection", xxssValue)
 		c.Header("Content-Security-Policy", cspValue)
+		c.Header("Referrer-Policy", referrerPolicyValue)
 
 		// HSTS must only be sent over HTTPS; sending it over HTTP would break
 		// plain-HTTP access permanently for affected browsers. Restrict to

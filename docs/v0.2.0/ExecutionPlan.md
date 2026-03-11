@@ -1277,16 +1277,53 @@ WHERE id = $1;
 11. Document findings and fixes
 
 **Acceptance Criteria:**
-- [ ] No SQL injection vulnerabilities
-- [ ] No XSS vulnerabilities
-- [ ] CSRF protection complete
-- [ ] No secret leakage
-- [ ] Authentication/authorization secure
-- [ ] All findings documented and addressed
+- [x] No SQL injection vulnerabilities
+- [x] No XSS vulnerabilities
+- [x] CSRF protection complete
+- [x] No secret leakage
+- [x] Authentication/authorization secure
+- [x] All findings documented and addressed
 
 **Deliverables:**
-- Security audit report
-- Fix commits for any issues found
+- Security audit report (findings documented below) ✓
+- Fix commits for all 5 issues found ✓
+
+**Findings and Fixes:**
+
+**Finding 1 – Information Leakage in Token Exchange Error Responses (High)**
+- `handleTokenExchangeError` returned `err.Error()` verbatim as `error_description` for `invalid_grant` errors. Attackers could determine whether a code existed, was expired, had already been used, or was issued to a different client.
+- Fix: Replaced with a single generic RFC 6749–style message for all `invalid_grant` cases: `"The provided authorization grant is invalid, expired, revoked, does not match the redirection URI, or was issued to another client."`
+- File: `internal/transport/http/api/v1/handler/auth_handler.go`
+
+**Finding 2 – Unbounded Pagination Parameters (Medium)**
+- `limit` and `offset` query parameters on list endpoints (clients, users, sessions) had no validation bounds. Any integer — including negative values or millions — was accepted, enabling potential DoS via large database queries.
+- Fix: Added `parsePaginationParams()` helper enforcing `limit ∈ [1, 100]` and `offset ≥ 0`. Returns HTTP 400 on violation.
+- Files: `internal/transport/http/api/v1/handler/handler.go` (new helper + `paginationMaxLimit = 100`), `client_handler.go`, `user_handler.go`, `session_handler.go`
+
+**Finding 3 – Provider OAuth URLs Not Requiring HTTPS in Production (Medium)**
+- Provider `auth_url`, `token_url`, and `user_info_url` validated http/https scheme but did not require HTTPS in production, whereas redirect URIs already had HTTPS enforcement. This could expose OAuth access tokens and user data in transit.
+- Fix: Extended `validateURL` to enforce HTTPS for non-loopback hosts in production (matching redirect URI policy). Added `env` field to `provider.Service` and threaded it through validation.
+- Files: `internal/service/provider/validation.go`, `internal/service/provider/provider.go`, `internal/app/auth-server/server.go`, `internal/transport/http/api/v1/handler/testhelpers_test.go`, `internal/service/provider/provider_test.go`
+
+**Finding 4 – Log Injection via X-Request-ID Header (Medium)**
+- `ContextMiddleware` accepted any `X-Request-ID` header value without sanitization and stored it verbatim in structured (JSON) log output. An attacker could inject control characters or JSON into log lines.
+- Fix: Added `validRequestIDPattern = regexp.MustCompile('^[a-zA-Z0-9\-_]{1,64}$')`. Values that fail validation are silently replaced with a fresh UUID.
+- Files: `internal/middleware/context.go`, `internal/middleware/context_test.go` (4 new tests)
+
+**Finding 5 – Missing Referrer-Policy Header (Low)**
+- `SecurityHeadersMiddleware` did not set `Referrer-Policy`. Authorization codes visible in redirect URI query strings could potentially leak to third-party origins via the browser `Referer` header on subsequent navigations.
+- Fix: Added `Referrer-Policy: no-referrer` to `SecurityHeadersMiddleware`.
+- Files: `internal/middleware/security.go`, `internal/middleware/security_test.go` (2 new tests + existing tests updated)
+
+**Areas Confirmed Secure (No Issues Found):**
+- **SQL injection:** All queries use sqlc-generated parameterized statements via pgx/v5; no string concatenation in SQL paths.
+- **XSS:** API returns only `Content-Type: application/json`; CSP `default-src 'none'` blocks all browser resource loading.
+- **CSRF:** Double-submit cookie pattern applied to all state-changing admin and auth routes; OAuth callbacks use the state parameter; token exchange uses `client_secret`.
+- **Rate limiting:** Token endpoint 10/min/IP, OAuth login 20/min/IP, admin endpoints 30/min/user — all verified with tests.
+- **CORS:** Explicit origin allowlist with credentials in production; wildcard (no credentials) in development; tested with 13 scenarios.
+- **Token validation:** ECDSA signature + expiry + revocation check on every authenticated request.
+- **Secret exposure:** Provider secrets AES-256-GCM encrypted at rest; client secrets bcrypt-hashed (cost 12); secrets never returned in API responses; tokens/codes absent from all log lines.
+- **Authorization:** Admin middleware enforces `is_admin` DB flag; `ErrProviderClientMismatch` surfaced as 404 to prevent cross-client information leakage.
 
 ### 6.7 Task 5.7: Penetration Testing
 
@@ -1327,7 +1364,7 @@ WHERE id = $1;
 - [x] CSRF protection complete
 - [x] Security headers applied
 - [x] Security logging implemented
-- [ ] Security audit completed
+- [x] Security audit completed
 - [ ] Penetration testing done
 - [ ] All critical/high issues fixed
 - [ ] Security documentation updated

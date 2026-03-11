@@ -86,8 +86,10 @@ func parseOptionalBool(c *gin.Context, key string) (*bool, error) {
 // ListAuthorizationCodes handles GET /api/v1/sessions/codes
 // Returns a paginated, optionally filtered list of authorization codes (admin only).
 func (h *ApiV1Handler) ListAuthorizationCodes(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, offset, ok := parsePaginationParams(c)
+	if !ok {
+		return
+	}
 
 	clientID, err := parseOptionalUUID(c, "client_id")
 	if err != nil {
@@ -111,8 +113,8 @@ func (h *ApiV1Handler) ListAuthorizationCodes(c *gin.Context) {
 		ClientID:  clientID,
 		UserID:    userID,
 		IsRevoked: isRevoked,
-		Limit:     int32(limit),
-		Offset:    int32(offset),
+		Limit:     limit,
+		Offset:    offset,
 	})
 	if err != nil {
 		log.Printf("ListAuthorizationCodes: %v", err)
@@ -151,8 +153,10 @@ func (h *ApiV1Handler) RevokeAuthorizationCode(c *gin.Context) {
 // ListAccessTokens handles GET /api/v1/sessions/tokens
 // Returns a paginated, optionally filtered list of access tokens (admin only).
 func (h *ApiV1Handler) ListAccessTokens(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, offset, ok := parsePaginationParams(c)
+	if !ok {
+		return
+	}
 
 	clientID, err := parseOptionalUUID(c, "client_id")
 	if err != nil {
@@ -176,8 +180,8 @@ func (h *ApiV1Handler) ListAccessTokens(c *gin.Context) {
 		ClientID:  clientID,
 		UserID:    userID,
 		IsRevoked: isRevoked,
-		Limit:     int32(limit),
-		Offset:    int32(offset),
+		Limit:     limit,
+		Offset:    offset,
 	})
 	if err != nil {
 		log.Printf("ListAccessTokens: %v", err)

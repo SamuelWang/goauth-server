@@ -55,8 +55,10 @@ func handleClientError(c *gin.Context, err error) {
 // ListClients handles GET /api/v1/clients
 // Returns a paginated list of clients (admin only).
 func (h *ApiV1Handler) ListClients(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, offset, ok := parsePaginationParams(c)
+	if !ok {
+		return
+	}
 
 	var isActive *bool
 	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
@@ -70,8 +72,8 @@ func (h *ApiV1Handler) ListClients(c *gin.Context) {
 
 	result, err := h.clientService.ListClients(c.Request.Context(), client.ListClientsParams{
 		IsActive: isActive,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		Limit:    limit,
+		Offset:   offset,
 	})
 	if err != nil {
 		log.Printf("ListClients: %v", err)

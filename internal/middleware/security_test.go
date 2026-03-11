@@ -130,6 +130,26 @@ func TestSecurityHeaders_AppliedToAllMethods(t *testing.T) {
 	assert.Equal(t, "1; mode=block", w.Header().Get("X-XSS-Protection"))
 	assert.NotEmpty(t, w.Header().Get("Content-Security-Policy"))
 	assert.NotEmpty(t, w.Header().Get("Strict-Transport-Security"))
+	assert.Equal(t, "no-referrer", w.Header().Get("Referrer-Policy"))
+}
+
+// ---------------------------------------------------------------------------
+// Referrer-Policy
+// ---------------------------------------------------------------------------
+
+func TestSecurityHeaders_ReferrerPolicy(t *testing.T) {
+	r := setupSecurityRouter("development")
+	w := doSecurityRequest(t, r, http.MethodGet, "/test")
+
+	assert.Equal(t, "no-referrer", w.Header().Get("Referrer-Policy"),
+		"Referrer-Policy must be set to no-referrer to prevent authorization code leakage via Referer header")
+}
+
+func TestSecurityHeaders_ReferrerPolicy_SetInProduction(t *testing.T) {
+	r := setupSecurityRouter("production")
+	w := doSecurityRequest(t, r, http.MethodGet, "/test")
+
+	assert.Equal(t, "no-referrer", w.Header().Get("Referrer-Policy"))
 }
 
 // ---------------------------------------------------------------------------
@@ -142,4 +162,5 @@ func TestSecurityHeaders_ConstantValues(t *testing.T) {
 	assert.Equal(t, "1; mode=block", xxssValue)
 	assert.Equal(t, "max-age=31536000; includeSubDomains", hstsValue)
 	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", cspValue)
+	assert.Equal(t, "no-referrer", referrerPolicyValue)
 }

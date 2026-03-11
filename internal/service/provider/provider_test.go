@@ -21,7 +21,7 @@ var testEncryptionKey = []byte("01234567890123456789012345678901")
 
 func newTestService(t *testing.T, q *mocks.MockQuerier) *Service {
 	t.Helper()
-	svc, err := New(q, testEncryptionKey)
+	svc, err := New(q, testEncryptionKey, "development")
 	require.NoError(t, err)
 	return svc
 }
@@ -46,7 +46,7 @@ func sampleProvider(clientID uuid.UUID) repository.OauthProvider {
 }
 
 func TestNew_InvalidKeyLength(t *testing.T) {
-	_, err := New(&mocks.MockQuerier{}, []byte("tooshort"))
+	_, err := New(&mocks.MockQuerier{}, []byte("tooshort"), "development")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "32 bytes")
 }

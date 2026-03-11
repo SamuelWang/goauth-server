@@ -35,7 +35,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decoding provider encryption key: %w", err)
 	}
-	providerSvc, err := provider.New(repo, encKeyBytes)
+	providerSvc, err := provider.New(repo, encKeyBytes, cfg.Server.Env)
 	if err != nil {
 		return nil, fmt.Errorf("initializing provider service: %w", err)
 	}

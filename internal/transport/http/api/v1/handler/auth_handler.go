@@ -105,7 +105,7 @@ func handleTokenExchangeError(c *gin.Context, err error) {
 		errors.Is(err, auth.ErrCodeRedirectMismatch):
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             "invalid_grant",
-			"error_description": err.Error(),
+			"error_description": "The provided authorization grant is invalid, expired, revoked, does not match the redirection URI, or was issued to another client.",
 		})
 	default:
 		log.Printf("TokenExchange: unexpected error: %v", err)

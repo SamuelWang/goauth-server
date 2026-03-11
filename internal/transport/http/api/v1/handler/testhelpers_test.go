@@ -85,7 +85,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	_, err = rand.Read(encKey)
 	require.NoError(t, err)
 
-	providerSvc, err := provider.New(mockQ, encKey)
+	providerSvc, err := provider.New(mockQ, encKey, cfg.Server.Env)
 	require.NoError(t, err)
 
 	clientSvc := client.New(mockQ, cfg.Server.Env)
