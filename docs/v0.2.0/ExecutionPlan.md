@@ -1550,16 +1550,24 @@ WHERE id = $1;
 7. Test build and run
 
 **Acceptance Criteria:**
-- [ ] Multi-stage build works
-- [ ] Image size optimized
-- [ ] Runs as non-root user
-- [ ] Health check configured
-- [ ] Image builds successfully
-- [ ] Container runs correctly
+- [x] Multi-stage build works
+- [x] Image size optimized
+- [x] Runs as non-root user
+- [x] Health check configured
+- [x] Image builds successfully
+- [x] Container runs correctly
 
 **Deliverables:**
-- `Dockerfile`
-- `.dockerignore`
+- `Dockerfile` ✓
+- `.dockerignore` ✓
+
+**Notes:**
+- Two-stage build: `golang:1.25.5-alpine` builder → `alpine:3.21` runtime.
+- Binary compiled with `CGO_ENABLED=0 -ldflags="-w -s"` for a statically-linked, stripped binary; final image is ~45 MB.
+- Runtime stage installs only `ca-certificates` (required for HTTPS calls to OAuth providers), `tzdata`, and `wget` (used by the health probe).
+- A dedicated `appuser:appgroup` (non-root, system account) is created with `adduser -S / addgroup -S` and set via `USER appuser`.
+- `HEALTHCHECK` polls `GET /ops/health` every 30 s (5 s timeout, 15 s start period, 3 retries) using the shell form so `${PORT:-8080}` is expanded correctly at runtime.
+- `.dockerignore` excludes `.git/`, `.env`, `.cert/`, `bin/`, `docs/`, `coverage.out`, and tooling directories to minimise build context size and prevent accidental inclusion of secrets or private keys.
 
 ### 7.5 Task 6.5: Create Docker Compose Configuration
 

@@ -1,0 +1,26 @@
+# ─── Version control ─────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ─── Build outputs ────────────────────────────────────────────────────────────
+bin/
+coverage.out
+
+# ─── Sensitive configuration ──────────────────────────────────────────────────
+# Never bake secrets or private keys into the image
+.env
+.cert/
+
+# ─── Development tooling ──────────────────────────────────────────────────────
+.vscode/
+.github/
+
+# ─── Documentation ────────────────────────────────────────────────────────────
+docs/
+README.md
+LICENSE
+
+# ─── Docker files ─────────────────────────────────────────────────────────────
+# Exclude from the build context to avoid cache invalidation on unrelated changes
+Dockerfile
+.dockerignore
