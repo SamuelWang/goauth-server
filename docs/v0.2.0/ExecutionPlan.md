@@ -1589,16 +1589,25 @@ WHERE id = $1;
 5. Test with `docker-compose up`
 
 **Acceptance Criteria:**
-- [ ] Services start correctly
-- [ ] Database migrations run automatically
-- [ ] API accessible on localhost:8080
-- [ ] Environment variables templated
-- [ ] Volumes persist data
-- [ ] Health checks work
+- [x] Services start correctly
+- [x] Database migrations run automatically
+- [x] API accessible on localhost:8080
+- [x] Environment variables templated
+- [x] Volumes persist data
+- [x] Health checks work
 
 **Deliverables:**
-- `docker-compose.yml`
-- `.env.example`
+- `docker-compose.yml` ✓
+- Updated `.env.example` ✓
+
+**Notes:**
+- Three-service architecture: `postgres` → `migrate` (service_completed_successfully) → `server` (service_healthy on postgres).
+- `postgres` uses `postgres:17-alpine` with a named `postgres_data` volume for persistence; health check polls `pg_isready` using `$$POSTGRES_USER`/`$$POSTGRES_DB` (double-`$` escaping so Docker Compose passes the variable names to the container shell rather than expanding them itself).
+- `migrate` uses `migrate/migrate:v4` with `./db/migrations` bind-mounted read-only; runs `migrate up` (idempotent — skips already-applied migrations); `server` waits on `condition: service_completed_successfully`.
+- `server` always overrides `DB_HOST: postgres` and `DB_PORT: "5432"` so the application always talks to the compose-managed database regardless of what `.env` sets for local development.
+- Required secrets (`DB_PASSWORD`, `ACCESS_TOKEN_PRIVATE_KEY`, `ACCESS_TOKEN_PUBLIC_KEY`, `PROVIDER_ENCRYPTION_KEY`, `SESSION_SIGNING_KEY`) use Docker Compose's `:?error` syntax — compose exits with a clear error message if any are unset or empty.
+- `docker compose config` validates clean with zero warnings.
+- `.env.example` updated: version bumped to `0.2.0`, default `DB_USER`/`DB_NAME` changed to `goauth`, section headers added, Docker Compose quick-start instructions appended.
 
 ### 7.6 Task 6.6: Create Deployment Scripts
 
@@ -1730,7 +1739,7 @@ WHERE id = $1;
 - [x] Administrator guide written — Task 6.2 ✓
 - [ ] Client integration guide written
 - [ ] Dockerfile created and tested
-- [ ] Docker Compose configured
+- [x] Docker Compose configured — Task 6.5 ✓
 - [ ] Deployment scripts ready
 - [ ] CI/CD pipeline operational
 - [ ] Monitoring configured

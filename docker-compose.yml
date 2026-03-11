@@ -1,0 +1,113 @@
+# Docker Compose configuration for Goauth Server
+#
+# Usage:
+#   cp .env.example .env   # fill in required values (see comments in .env.example)
+#   docker compose up --build
+#
+# Services:
+#   postgres  – PostgreSQL 17 database with persistent volume
+#   migrate   – Runs all pending db/migrations/*.up.sql (exits 0 on success)
+#   server    – Goauth API server (starts after migrate completes)
+
+services:
+
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-goauth}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}
+      POSTGRES_DB: ${DB_NAME:-goauth}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Use the container's own POSTGRES_USER / POSTGRES_DB env vars for reliability
+      # $$ escapes the variable so Docker Compose passes it to the container shell
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+  # ─── Database Migrations ──────────────────────────────────────────────────
+  # Uses the official golang-migrate image to apply all pending migrations.
+  # The service exits with code 0 once migrations succeed; the server waits
+  # for this (service_completed_successfully) before starting.
+  migrate:
+    image: migrate/migrate:v4
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${DB_USER:-goauth}:${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}@postgres:5432/${DB_NAME:-goauth}?sslmode=disable"
+      - "up"
+    volumes:
+      - ./db/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - goauth_net
+    restart: on-failure
+
+  # ─── Goauth API Server ────────────────────────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # Application
+      APP_NAME: ${APP_NAME:-goauth-server}
+      VERSION: ${VERSION:-0.2.0}
+
+      # Server – HOST/SCHEME are used to construct the OAuth callback URL
+      ENV: ${ENV:-development}
+      SCHEME: ${SCHEME:-http}
+      HOST: ${HOST:-localhost}
+      PORT: ${PORT:-8080}
+
+      # Database – always point at the postgres service inside the Docker network
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-goauth}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}
+      DB_NAME: ${DB_NAME:-goauth}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+
+      # Access tokens (ES256 / ECDSA P-256 PEM strings; required)
+      ACCESS_TOKEN_PRIVATE_KEY: ${ACCESS_TOKEN_PRIVATE_KEY:?ACCESS_TOKEN_PRIVATE_KEY is required – set it in .env}
+      ACCESS_TOKEN_PUBLIC_KEY: ${ACCESS_TOKEN_PUBLIC_KEY:?ACCESS_TOKEN_PUBLIC_KEY is required – set it in .env}
+      ACCESS_TOKEN_EXPIRY_MINUTES: ${ACCESS_TOKEN_EXPIRY_MINUTES:-60}
+
+      # Security keys (hex-encoded 32-byte values; required)
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:?PROVIDER_ENCRYPTION_KEY is required – set it in .env}
+      SESSION_SIGNING_KEY: ${SESSION_SIGNING_KEY:?SESSION_SIGNING_KEY is required – set it in .env}
+
+      # CORS – comma-separated allowed origins (leave blank in development)
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+
+      # Google OAuth (optional legacy config – disabled by default)
+      GOOGLE_ENABLED: ${GOOGLE_ENABLED:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+# ─── Networks ────────────────────────────────────────────────────────────────
+networks:
+  goauth_net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
