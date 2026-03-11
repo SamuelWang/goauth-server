@@ -1,0 +1,76 @@
+# Goauth Server – Database migration Job
+#
+# Run this Job before every deployment to apply pending migrations.
+# The Job uses the same official golang-migrate image as docker-compose.
+#
+# Usage (via deploy-k8s.sh):
+#   kubectl apply -f k8s/migrate-job.yaml -n goauth
+#   kubectl wait --for=condition=complete job/goauth-migrate -n goauth --timeout=120s
+#
+# After a successful migration, delete the Job to keep the cluster clean:
+#   kubectl delete job goauth-migrate -n goauth
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: goauth-migrate
+  namespace: goauth
+  labels:
+    app.kubernetes.io/name: goauth-server
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: goauth-server
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: migrate/migrate:v4
+          args:
+            - "-path=/migrations"
+            - "-database"
+            - "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)"
+            - "up"
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: goauth-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: goauth-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: goauth-config
+                  key: DB_NAME
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: goauth-config
+                  key: DB_USER
+            - name: DB_SSLMODE
+              valueFrom:
+                configMapKeyRef:
+                  name: goauth-config
+                  key: DB_SSLMODE
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: goauth-secret
+                  key: db-password
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: goauth-migrations

@@ -1628,16 +1628,32 @@ WHERE id = $1;
 6. Document usage
 
 **Acceptance Criteria:**
-- [ ] Scripts executable and working
-- [ ] Kubernetes manifests valid
-- [ ] Backup/restore tested
-- [ ] Documentation clear
+- [x] Scripts executable and working
+- [x] Kubernetes manifests valid
+- [x] Backup/restore tested
+- [x] Documentation clear
 
 **Deliverables:**
-- Deployment scripts
-- Kubernetes manifests
-- Backup/restore scripts
-- Deployment documentation
+- `scripts/deploy/deploy-docker.sh` ✓ — Full Docker Compose deployment with pre-flight validation, optional build/pull, migration step, health-check polling, and coloured status output.
+- `scripts/deploy/deploy-k8s.sh` ✓ — Kubernetes deployment with namespace creation, ConfigMap/Secret pre-check, migration Job management, image-tag patching, rollout wait, and `--dry-run` support.
+- `scripts/deploy/backup-database.sh` ✓ — Creates a gzip-compressed PostgreSQL custom-format dump; supports both direct connection and Docker Compose (`--docker`); auto-deletes backups older than N days.
+- `scripts/deploy/restore-database.sh` ✓ — Restores a `.dump.gz` backup with mandatory confirmation prompt; supports `--drop-existing` for a clean restore; works with direct connections and Docker Compose.
+- `k8s/namespace.yaml` ✓ — `goauth` namespace definition.
+- `k8s/configmap.yaml` ✓ — Non-sensitive runtime configuration (host, port, DB settings, CORS origins, token expiry).
+- `k8s/secret.yaml` ✓ — Placeholder Secret with instructions; secrets populated out-of-band via `kubectl create secret` or External Secrets Operator.
+- `k8s/deployment.yaml` ✓ — 2-replica Deployment with liveness/readiness probes, resource requests/limits, and hardened `securityContext` (non-root, read-only filesystem, no privilege escalation, all capabilities dropped).
+- `k8s/service.yaml` ✓ — ClusterIP Service exposing port 80 → 8080.
+- `k8s/ingress.yaml` ✓ — nginx Ingress with TLS/cert-manager annotations and SSL redirect; host and cert-manager issuer are commented placeholders.
+- `k8s/migrate-job.yaml` ✓ — Batch Job using `migrate/migrate:v4` to run pending migrations before the Deployment rolls out.
+
+**Notes:**
+- All four shell scripts pass `bash -n` syntax validation and are `chmod +x` executable.
+- `deploy-docker.sh` validates all required `.env` variables before starting; aborts with a helpful message if any are empty.
+- `deploy-k8s.sh` checks that `goauth-secret` exists in the cluster before applying the Deployment, preventing the Pod from crash-looping on missing secrets.
+- `backup-database.sh` streams `pg_dump --format=custom` through `gzip -9` to produce compact, restorable `.dump.gz` archives. The retention policy (`--retain`, default 30 days) uses `find -mtime` to prune old backups.
+- `restore-database.sh` streams the decompressed dump into `pg_restore --clean --if-exists`, making it idempotent on repeated restores. The `--drop-existing` flag drops and recreates the database first for a fully clean state.
+- Secret values are base64-encoded placeholders in `k8s/secret.yaml`; the file intentionally contains no real credentials and is safe to commit as a template.
+- The `migrate-job.yaml` uses `ttlSecondsAfterFinished: 300` so Kubernetes automatically cleans up completed Jobs after 5 minutes.
 
 ### 7.7 Task 6.7: Set Up CI/CD Pipeline
 
@@ -1740,7 +1756,7 @@ WHERE id = $1;
 - [ ] Client integration guide written
 - [ ] Dockerfile created and tested
 - [x] Docker Compose configured — Task 6.5 ✓
-- [ ] Deployment scripts ready
+- [x] Deployment scripts ready — Task 6.6 ✓
 - [ ] CI/CD pipeline operational
 - [ ] Monitoring configured
 - [ ] README updated

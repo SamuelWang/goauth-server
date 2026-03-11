@@ -37,7 +37,7 @@ services:
   # The service exits with code 0 once migrations succeed; the server waits
   # for this (service_completed_successfully) before starting.
   migrate:
-    image: migrate/migrate:v4
+    image: migrate/migrate:4
     command:
       - "-path=/migrations"
       - "-database=postgres://${DB_USER:-goauth}:${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}@postgres:5432/${DB_NAME:-goauth}?sslmode=disable"
