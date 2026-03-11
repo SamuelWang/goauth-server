@@ -84,7 +84,23 @@ func parseOptionalBool(c *gin.Context, key string) (*bool, error) {
 }
 
 // ListAuthorizationCodes handles GET /api/v1/sessions/codes
-// Returns a paginated, optionally filtered list of authorization codes (admin only).
+//
+// @Summary     List authorization codes
+// @Description Returns a paginated, optionally filtered list of authorization codes. Admin only.
+// @Tags        Sessions
+// @Produce     json
+// @Param       limit      query     int     false  "Items per page (1-100)"     default(20)
+// @Param       offset     query     int     false  "Zero-based offset"           default(0)
+// @Param       client_id  query     string  false  "Filter by client UUID"
+// @Param       user_id    query     string  false  "Filter by user UUID"
+// @Param       is_revoked query     bool    false  "Filter by revoked status"
+// @Success     200  {object}  handler.ListAuthorizationCodesResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/sessions/codes [get]
 func (h *ApiV1Handler) ListAuthorizationCodes(c *gin.Context) {
 	limit, offset, ok := parsePaginationParams(c)
 	if !ok {
@@ -134,7 +150,19 @@ func (h *ApiV1Handler) ListAuthorizationCodes(c *gin.Context) {
 }
 
 // RevokeAuthorizationCode handles DELETE /api/v1/sessions/codes/:id
-// Revokes a single authorization code by ID (admin only).
+//
+// @Summary     Revoke an authorization code
+// @Description Revokes a single authorization code by ID. Admin only.
+// @Tags        Sessions
+// @Param       id  path  string  true  "Authorization code UUID"
+// @Success     204
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/sessions/codes/{id} [delete]
 func (h *ApiV1Handler) RevokeAuthorizationCode(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -151,7 +179,23 @@ func (h *ApiV1Handler) RevokeAuthorizationCode(c *gin.Context) {
 }
 
 // ListAccessTokens handles GET /api/v1/sessions/tokens
-// Returns a paginated, optionally filtered list of access tokens (admin only).
+//
+// @Summary     List access tokens
+// @Description Returns a paginated, optionally filtered list of access tokens. Admin only.
+// @Tags        Sessions
+// @Produce     json
+// @Param       limit      query     int     false  "Items per page (1-100)"     default(20)
+// @Param       offset     query     int     false  "Zero-based offset"           default(0)
+// @Param       client_id  query     string  false  "Filter by client UUID"
+// @Param       user_id    query     string  false  "Filter by user UUID"
+// @Param       is_revoked query     bool    false  "Filter by revoked status"
+// @Success     200  {object}  handler.ListAccessTokensResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/sessions/tokens [get]
 func (h *ApiV1Handler) ListAccessTokens(c *gin.Context) {
 	limit, offset, ok := parsePaginationParams(c)
 	if !ok {
@@ -201,7 +245,19 @@ func (h *ApiV1Handler) ListAccessTokens(c *gin.Context) {
 }
 
 // RevokeAccessToken handles DELETE /api/v1/sessions/tokens/:id
-// Revokes a single access token by ID (admin only).
+//
+// @Summary     Revoke an access token
+// @Description Revokes a single access token by ID. Admin only.
+// @Tags        Sessions
+// @Param       id  path  string  true  "Access token UUID"
+// @Success     204
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/sessions/tokens/{id} [delete]
 func (h *ApiV1Handler) RevokeAccessToken(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

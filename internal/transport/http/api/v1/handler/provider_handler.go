@@ -68,7 +68,19 @@ func handleProviderError(c *gin.Context, err error) {
 }
 
 // ListProviders handles GET /api/v1/clients/:client_id/providers
-// Returns all OAuth providers configured for the specified client (admin only).
+//
+// @Summary     List providers for a client
+// @Description Returns all OAuth providers configured for the specified client. Admin only.
+// @Tags        Providers
+// @Produce     json
+// @Param       client_id  path      string  true  "Client UUID"
+// @Success     200  {object}  handler.ListProvidersResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/providers [get]
 func (h *ApiV1Handler) ListProviders(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {
@@ -91,7 +103,21 @@ func (h *ApiV1Handler) ListProviders(c *gin.Context) {
 }
 
 // GetProvider handles GET /api/v1/clients/:client_id/providers/:id
-// Returns a single OAuth provider, validating it belongs to the specified client (admin only).
+//
+// @Summary     Get a provider
+// @Description Returns a single OAuth provider, validating it belongs to the specified client. Admin only.
+// @Tags        Providers
+// @Produce     json
+// @Param       client_id  path      string  true  "Client UUID"
+// @Param       id         path      string  true  "Provider UUID"
+// @Success     200  {object}  handler.ProviderResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/providers/{id} [get]
 func (h *ApiV1Handler) GetProvider(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {
@@ -119,7 +145,23 @@ func (h *ApiV1Handler) GetProvider(c *gin.Context) {
 }
 
 // CreateProvider handles POST /api/v1/clients/:client_id/providers
-// Creates a new OAuth provider scoped to the specified client (admin only).
+//
+// @Summary     Create a provider
+// @Description Creates a new OAuth provider scoped to the specified client. Admin only.
+// @Tags        Providers
+// @Accept      json
+// @Produce     json
+// @Param       client_id  path      string                         true  "Client UUID"
+// @Param       body       body      handler.CreateProviderRequest  true  "Create provider request"
+// @Success     201  {object}  handler.ProviderResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     409  {object}  handler.ErrorResponse
+// @Failure     422  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/providers [post]
 func (h *ApiV1Handler) CreateProvider(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {
@@ -152,7 +194,25 @@ func (h *ApiV1Handler) CreateProvider(c *gin.Context) {
 }
 
 // UpdateProvider handles PATCH /api/v1/clients/:client_id/providers/:id
-// Updates an existing OAuth provider, validating client ownership (admin only).
+//
+// @Summary     Update a provider
+// @Description Updates an existing OAuth provider, validating client ownership. Admin only.
+// @Tags        Providers
+// @Accept      json
+// @Produce     json
+// @Param       client_id  path      string                         true  "Client UUID"
+// @Param       id         path      string                         true  "Provider UUID"
+// @Param       body       body      handler.UpdateProviderRequest  true  "Update provider request"
+// @Success     200  {object}  handler.ProviderResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     409  {object}  handler.ErrorResponse
+// @Failure     422  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/providers/{id} [patch]
 func (h *ApiV1Handler) UpdateProvider(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {
@@ -189,7 +249,20 @@ func (h *ApiV1Handler) UpdateProvider(c *gin.Context) {
 }
 
 // DeleteProvider handles DELETE /api/v1/clients/:client_id/providers/:id
-// Permanently removes an OAuth provider, validating client ownership (admin only).
+//
+// @Summary     Delete a provider
+// @Description Permanently removes an OAuth provider, validating client ownership. Admin only.
+// @Tags        Providers
+// @Param       client_id  path  string  true  "Client UUID"
+// @Param       id         path  string  true  "Provider UUID"
+// @Success     204
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/providers/{id} [delete]
 func (h *ApiV1Handler) DeleteProvider(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {

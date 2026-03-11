@@ -40,7 +40,22 @@ func handleUserError(c *gin.Context, err error) {
 }
 
 // ListUsers handles GET /api/v1/users
-// Returns a paginated list of users (admin only).
+//
+// @Summary     List users
+// @Description Returns a paginated list of users. Admin only.
+// @Tags        Users
+// @Produce     json
+// @Param       limit     query     int   false  "Items per page (1-100)"  default(20)
+// @Param       offset    query     int   false  "Zero-based offset"       default(0)
+// @Param       is_active query     bool  false  "Filter by active status"
+// @Param       is_admin  query     bool  false  "Filter by admin status"
+// @Success     200  {object}  handler.ListUsersResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/users [get]
 func (h *ApiV1Handler) ListUsers(c *gin.Context) {
 	limit, offset, ok := parsePaginationParams(c)
 	if !ok {
@@ -88,7 +103,22 @@ func (h *ApiV1Handler) ListUsers(c *gin.Context) {
 }
 
 // UpdateUserStatus handles PATCH /api/v1/users/:id
-// Updates a user's active status (admin only).
+//
+// @Summary     Update user status
+// @Description Updates a user's active status. Admin only.
+// @Tags        Users
+// @Accept      json
+// @Produce     json
+// @Param       id    path      string                            true  "User UUID"
+// @Param       body  body      handler.UpdateUserStatusRequest   true  "Update user status request"
+// @Success     200  {object}  handler.UserResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/users/{id} [patch]
 func (h *ApiV1Handler) UpdateUserStatus(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

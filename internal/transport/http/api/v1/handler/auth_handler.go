@@ -14,7 +14,15 @@ import (
 // ListEnabledProviders returns the enabled OAuth providers for the given
 // client. This is a public endpoint — no secret data is included.
 //
-// GET /api/v1/clients/:client_id/auth/providers
+// @Summary     List enabled providers for a client
+// @Description Returns provider names and display names enabled for the specified client. No credentials included.
+// @Tags        Auth
+// @Produce     json
+// @Param       client_id  path      string  true  "Client UUID"
+// @Success     200  {object}  handler.ListPublicProvidersResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Router      /api/v1/clients/{client_id}/auth/providers [get]
 func (h *ApiV1Handler) ListEnabledProviders(c *gin.Context) {
 	clientID, ok := parseClientID(c)
 	if !ok {
@@ -41,7 +49,17 @@ func (h *ApiV1Handler) ListEnabledProviders(c *gin.Context) {
 // TokenExchange exchanges an authorization code for an access token.
 // Returns an OAuth 2.0-compliant token response.
 //
-// POST /api/v1/auth/token
+// @Summary     Exchange authorization code for access token
+// @Description OAuth 2.0 token endpoint. Only the authorization_code grant type is supported.
+// @Tags        Auth
+// @Accept      json
+// @Produce     json
+// @Param       body  body      handler.TokenExchangeRequest  true  "Token exchange request"
+// @Success     200  {object}  handler.TokenExchangeResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Router      /api/v1/auth/token [post]
 func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
 	var req TokenExchangeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -116,7 +134,14 @@ func handleTokenExchangeError(c *gin.Context, err error) {
 // Logout revokes the caller's access token and clears the session cookie.
 // Requires a valid bearer token (enforced by AuthMiddleware).
 //
-// POST /api/v1/auth/logout
+// @Summary     Logout current user
+// @Description Revokes the bearer access token and clears the session cookie.
+// @Tags        Auth
+// @Produce     json
+// @Success     200  {object}  map[string]string
+// @Failure     401  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/auth/logout [post]
 func (h *ApiV1Handler) Logout(c *gin.Context) {
 	// Revoke the token so it cannot be replayed after the cookie is cleared.
 	if raw, exists := c.Get("raw_token"); exists {
@@ -136,7 +161,17 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
-// GetCurrentUser returns the current authenticated user's information
+// GetCurrentUser returns the current authenticated user's information.
+//
+// @Summary     Get current user
+// @Description Returns profile information for the currently authenticated user.
+// @Tags        Auth
+// @Produce     json
+// @Success     200  {object}  handler.GetCurrentUserResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/auth/me [get]
 func (h *ApiV1Handler) GetCurrentUser(c *gin.Context) {
 	// Get user from context (set by auth middleware)
 	userID, exists := getUserID(c)

@@ -53,7 +53,21 @@ func handleClientError(c *gin.Context, err error) {
 }
 
 // ListClients handles GET /api/v1/clients
-// Returns a paginated list of clients (admin only).
+//
+// @Summary     List clients
+// @Description Returns a paginated list of client applications. Admin only.
+// @Tags        Clients
+// @Produce     json
+// @Param       limit     query     int   false  "Items per page (1-100)"  default(20)
+// @Param       offset    query     int   false  "Zero-based offset"       default(0)
+// @Param       is_active query     bool  false  "Filter by active status"
+// @Success     200  {object}  handler.ListClientsResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients [get]
 func (h *ApiV1Handler) ListClients(c *gin.Context) {
 	limit, offset, ok := parsePaginationParams(c)
 	if !ok {
@@ -90,7 +104,20 @@ func (h *ApiV1Handler) ListClients(c *gin.Context) {
 }
 
 // GetClient handles GET /api/v1/clients/:id
-// Returns a single client by ID (admin only).
+//
+// @Summary     Get a client
+// @Description Returns a single client application by ID. Admin only.
+// @Tags        Clients
+// @Produce     json
+// @Param       client_id  path      string  true  "Client UUID"
+// @Success     200  {object}  handler.ClientResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id} [get]
 func (h *ApiV1Handler) GetClient(c *gin.Context) {
 	id, ok := parseClientResourceID(c)
 	if !ok {
@@ -107,8 +134,22 @@ func (h *ApiV1Handler) GetClient(c *gin.Context) {
 }
 
 // CreateClient handles POST /api/v1/clients
-// Creates a new client. Returns the client with the plain secret (returned once only).
-// Admin only.
+//
+// @Summary     Create a client
+// @Description Creates a new client application. Returns the client with the plain secret (returned once only). Admin only.
+// @Tags        Clients
+// @Accept      json
+// @Produce     json
+// @Param       body  body      handler.CreateClientRequest  true  "Create client request"
+// @Success     201  {object}  handler.ClientWithSecretResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     409  {object}  handler.ErrorResponse
+// @Failure     422  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients [post]
 func (h *ApiV1Handler) CreateClient(c *gin.Context) {
 	adminUserID, ok := getUserID(c)
 	if !ok {
@@ -147,7 +188,24 @@ func (h *ApiV1Handler) CreateClient(c *gin.Context) {
 }
 
 // UpdateClient handles PATCH /api/v1/clients/:id
-// Updates a client's configuration (admin only).
+//
+// @Summary     Update a client
+// @Description Updates a client's configuration. Admin only.
+// @Tags        Clients
+// @Accept      json
+// @Produce     json
+// @Param       client_id  path      string                       true  "Client UUID"
+// @Param       body       body      handler.UpdateClientRequest  true  "Update client request"
+// @Success     200  {object}  handler.ClientResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     409  {object}  handler.ErrorResponse
+// @Failure     422  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id} [patch]
 func (h *ApiV1Handler) UpdateClient(c *gin.Context) {
 	id, ok := parseClientResourceID(c)
 	if !ok {
@@ -175,7 +233,20 @@ func (h *ApiV1Handler) UpdateClient(c *gin.Context) {
 }
 
 // RegenerateClientSecret handles POST /api/v1/clients/:id/regenerate-secret
-// Generates a new client secret. Returns the new plain secret once (admin only).
+//
+// @Summary     Regenerate client secret
+// @Description Generates a new client secret. Returns the new plain secret once. Admin only.
+// @Tags        Clients
+// @Produce     json
+// @Param       client_id  path      string  true  "Client UUID"
+// @Success     200  {object}  handler.ClientWithSecretResponse
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id}/regenerate-secret [post]
 func (h *ApiV1Handler) RegenerateClientSecret(c *gin.Context) {
 	id, ok := parseClientResourceID(c)
 	if !ok {
@@ -195,7 +266,19 @@ func (h *ApiV1Handler) RegenerateClientSecret(c *gin.Context) {
 }
 
 // DeleteClient handles DELETE /api/v1/clients/:id
-// Soft-deletes a client (sets is_active = false). Admin only.
+//
+// @Summary     Delete a client
+// @Description Soft-deletes a client (sets is_active = false). Admin only.
+// @Tags        Clients
+// @Param       client_id  path  string  true  "Client UUID"
+// @Success     204
+// @Failure     400  {object}  handler.ErrorResponse
+// @Failure     401  {object}  handler.ErrorResponse
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/clients/{client_id} [delete]
 func (h *ApiV1Handler) DeleteClient(c *gin.Context) {
 	id, ok := parseClientResourceID(c)
 	if !ok {

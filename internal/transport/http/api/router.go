@@ -16,6 +16,11 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config, authService *auth.Service
 	apiGroup := r.Group("/api")
 	apiGroup.Use(gin.Recovery(), gin.Logger(), middleware.ContextMiddleware(cfg))
 
+	// Swagger UI — only available in non-production environments.
+	if cfg.Server.Env != "production" {
+		registerDocsRoutes(apiGroup)
+	}
+
 	apiV1Group := apiGroup.Group("/v1")
 	v1.RegisterRoutes(apiV1Group, authService, userService, providerService, clientService, sessionService)
 }

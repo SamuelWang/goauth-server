@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+// ErrorResponse is the standard envelope for error responses.
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 // --- Client management ---
 
 // ClientResponse is the client object returned in API responses.
