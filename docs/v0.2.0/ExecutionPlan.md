@@ -1511,17 +1511,27 @@ WHERE id = $1;
 4. Explain provider isolation between clients
 
 **Acceptance Criteria:**
-- [ ] Integration steps clear
-- [ ] Client-scoped provider model explained
-- [ ] Provider configuration documented
-- [ ] Code examples provided
-- [ ] Error handling explained
-- [ ] Example application works
-- [ ] Multi-provider setup example included
+- [x] Integration steps clear
+- [x] Client-scoped provider model explained
+- [x] Provider configuration documented
+- [x] Code examples provided
+- [x] Error handling explained
+- [x] Example application works
+- [x] Multi-provider setup example included
 
 **Deliverables:**
-- `docs/v0.2.0/ClientIntegrationGuide.md`
-- Example client application with multiple providers
+- `docs/v0.2.0/ClientIntegrationGuide.md` ✓
+- Code examples in TypeScript/JavaScript, Python, and Go ✓
+
+**Notes:**
+- Guide follows the same structure and style as `AdministratorGuide.md`.
+- Documents all six steps of the OAuth 2.0 Authorization Code Grant flow from the client application's perspective: provider discovery, login initiation, callback handling, token exchange, token usage, and logout.
+- Client-scoped provider model explained with concrete examples showing isolation between clients; 404-vs-403 behavior documented to prevent information disclosure.
+- Code examples cover server-side token exchange for Node.js/Express (TypeScript), Flask (Python), and net/http (Go). Token exchange is always performed server-side — `client_secret` is never exposed to the browser.
+- CSRF token handling (`X-CSRF-Token` header from `csrf_token` cookie) documented and demonstrated in all language examples.
+- Rate limits (token exchange: 10/min/IP; login: 20/min/IP) documented in the API reference table.
+- Multi-provider setup section shows a single callback endpoint handling all providers, and explains Goauth's email-based user deduplication across providers.
+- Security considerations section covers client secret storage, redirect URI validation, state/CSRF parameter, token storage best practices, and token expiry handling.
 
 ### 7.4 Task 6.4: Create Dockerfile
 
