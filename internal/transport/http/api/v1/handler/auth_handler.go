@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/SamuelWang/goauth-server/internal/metrics"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
@@ -103,6 +104,7 @@ func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
 		ExpiresIn:   tokenResp.ExpiresIn,
 		Scope:       tokenResp.Scope,
 	})
+	metrics.TokensIssuedTotal.Inc()
 }
 
 // handleTokenExchangeError maps auth service errors to OAuth 2.0 error responses.
@@ -153,6 +155,7 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 			} else {
 				userID := c.GetString("user_id")
 				util.LogTokenRevoked(c.ClientIP(), c.GetString("request_id"), userID)
+				metrics.TokenRevocationsTotal.Inc()
 			}
 		}
 	}

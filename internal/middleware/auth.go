@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/SamuelWang/goauth-server/internal/metrics"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 				token = authHeader[7:]
 			} else {
 				util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "malformed authorization header")
+				metrics.AuthFailuresTotal.WithLabelValues("malformed_header").Inc()
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - malformed authorization header"})
 				c.Abort()
 				return
@@ -33,6 +35,7 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 			token, err = c.Cookie("access_token")
 			if err != nil {
 				util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "missing token")
+				metrics.AuthFailuresTotal.WithLabelValues("missing_token").Inc()
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - no token"})
 				c.Abort()
 				return
@@ -44,6 +47,7 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 		if err != nil {
 			log.Printf("Invalid token: %v", err)
 			util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "invalid token")
+			metrics.AuthFailuresTotal.WithLabelValues("invalid_token").Inc()
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - invalid token"})
 			c.Abort()
 			return
@@ -59,6 +63,7 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 		}
 		if isRevoked {
 			util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), claims.UserID, "token revoked")
+			metrics.AuthFailuresTotal.WithLabelValues("revoked_token").Inc()
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - token has been revoked"})
 			c.Abort()
 			return

@@ -10,6 +10,7 @@
 #   -p, --pull           Pull latest images before deploying
 #   -b, --build          Rebuild the server image before deploying
 #   --no-migrate         Skip running database migrations
+#   --no-monitoring      Skip starting Prometheus and Grafana
 #   -h, --help           Show this help message
 #
 # Environment variables (loaded from .env file):
@@ -38,6 +39,7 @@ IMAGE_TAG="latest"
 PULL=false
 BUILD=false
 RUN_MIGRATE=true
+RUN_MONITORING=true
 
 # ── Colours ─────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -63,7 +65,8 @@ while [[ $# -gt 0 ]]; do
     -t|--tag)       IMAGE_TAG="$2"; shift 2 ;;
     -p|--pull)      PULL=true;      shift   ;;
     -b|--build)     BUILD=true;     shift   ;;
-    --no-migrate)   RUN_MIGRATE=false; shift ;;
+    --no-migrate)   RUN_MIGRATE=false;    shift ;;
+    --no-monitoring) RUN_MONITORING=false; shift ;;
     -h|--help)      usage ;;
     *) log_error "Unknown option: $1"; usage ;;
   esac
@@ -122,7 +125,10 @@ export VERSION="${IMAGE_TAG}"
 # ── Optional: pull latest images ─────────────────────────────────────────────
 if [[ "${PULL}" == true ]]; then
   log_info "Pulling latest base images"
-  docker compose --env-file "${ENV_FILE}" pull postgres migrate
+  PULL_SERVICES="postgres migrate"
+  [[ "${RUN_MONITORING}" == true ]] && PULL_SERVICES+=' prometheus grafana'
+  # shellcheck disable=SC2086
+  docker compose --env-file "${ENV_FILE}" pull ${PULL_SERVICES}
   log_success "Images pulled"
 fi
 
@@ -155,7 +161,10 @@ fi
 
 # ── Deploy server ────────────────────────────────────────────────────────────
 log_info "Deploying server (tag: ${IMAGE_TAG})"
-docker compose --env-file "${ENV_FILE}" up -d --remove-orphans server
+DEPLOY_SERVICES="server"
+[[ "${RUN_MONITORING}" == true ]] && DEPLOY_SERVICES+=' prometheus grafana'
+# shellcheck disable=SC2086
+docker compose --env-file "${ENV_FILE}" up -d --remove-orphans ${DEPLOY_SERVICES}
 
 # ── Health check ─────────────────────────────────────────────────────────────
 PORT="$(grep -E '^PORT=' "${ENV_FILE}" | cut -d= -f2 || echo 8080)"
@@ -179,3 +188,9 @@ echo ""
 echo "  API:      http://localhost:${PORT}/api/v1"
 echo "  Docs:     http://localhost:${PORT}/api/docs/index.html"
 echo "  Health:   http://localhost:${PORT}/ops/health"
+echo "  Metrics:  http://localhost:${PORT}/metrics"
+if [[ "${RUN_MONITORING}" == true ]]; then
+  echo ""
+  echo "  Prometheus: http://localhost:9090"
+  echo "  Grafana:    http://localhost:3000  (admin / ${GRAFANA_ADMIN_PASSWORD:-admin})"
+fi

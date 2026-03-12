@@ -102,6 +102,50 @@ services:
       - goauth_net
     restart: unless-stopped
 
+  # ─── Prometheus ────────────────────────────────────────────────────────────
+  # Scrapes metrics from /metrics on the server service every 15 seconds and
+  # evaluates the alert rules defined in monitoring/prometheus/alerts.yml.
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - server
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+  # ─── Grafana ───────────────────────────────────────────────────────────────
+  # Provides dashboards for the Prometheus metrics.  The Prometheus data source
+  # and the Goauth dashboard are provisioned automatically on startup.
+  grafana:
+    image: grafana/grafana:11.6.1
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
 # ─── Networks ────────────────────────────────────────────────────────────────
 networks:
   goauth_net:
@@ -110,4 +154,8 @@ networks:
 # ─── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
   postgres_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local

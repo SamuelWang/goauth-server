@@ -1699,7 +1699,8 @@ WHERE id = $1;
 ### 7.8 Task 6.8: Create Monitoring and Alerting
 
 **Priority:** Medium  
-**Estimated Time:** 8 hours
+**Estimated Time:** 8 hours  
+**Status:** ✅ Complete
 
 **Steps:**
 1. Integrate Prometheus metrics:
@@ -1716,16 +1717,43 @@ WHERE id = $1;
 4. Document monitoring setup
 
 **Acceptance Criteria:**
-- [ ] Metrics exposed at `/metrics`
-- [ ] Dashboards visualize key metrics
-- [ ] Alerts trigger correctly
-- [ ] Documentation complete
+- [x] Metrics exposed at `/metrics`
+- [x] Dashboards visualize key metrics
+- [x] Alerts trigger correctly
+- [x] Documentation complete
 
 **Deliverables:**
-- Prometheus metrics integration
-- Grafana dashboard JSON
-- Alert rules
-- Monitoring documentation
+- `internal/metrics/metrics.go` ✓ — Dedicated Prometheus registry with all metric collectors. Auto-initialises on package import (`init()` + `sync.Once`) so unit tests work without calling `Init()` explicitly.
+- `internal/middleware/metrics.go` ✓ — `MetricsMiddleware()` Gin middleware that records `goauth_http_requests_total` (method, path, status_code) and `goauth_http_request_duration_seconds` histograms for every request. Uses `c.FullPath()` (route template) as the label to prevent cardinality explosion from dynamic UUID path parameters.
+- `internal/transport/http/ops/router.go` ✓ — `/metrics` GET endpoint registered on the Gin engine, served directly from the app-level `metrics.Registry` via `promhttp.HandlerFor`.
+- `internal/app/auth-server/server.go` ✓ — `MetricsMiddleware()` registered globally before CORS and security headers so every route is instrumented.
+- `cmd/auth-server/main.go` ✓ — `metrics.Init()` called at startup before `NewServer()`.
+- `monitoring/prometheus/prometheus.yml` ✓ — Prometheus scrape configuration targeting `server:8080/metrics` every 15 s with `alerts.yml` rule file.
+- `monitoring/prometheus/alerts.yml` ✓ — Eight alert rules: `GoauthServerDown`, `HighHTTP5xxRate` (>5%), `HighHTTP4xxRate` (>20%), `HighRequestLatency` (p95 >1s), `HighRateLimitViolations` (>10/s), `HighAuthFailureRate` (>5/s), `HighCSRFViolations` (>1/s), `HighGoRoutineCount` (>1000), `HighMemoryUsage` (>512 MiB).
+- `monitoring/grafana/dashboards/goauth.json` ✓ — Grafana dashboard with 4 sections: Overview (4 stat panels), HTTP Traffic (request rate, error rate, latency percentiles), Token Issuance (issued vs revoked), Security Events (auth failures, rate-limit violations, CSRF/admin denials), Process (goroutines, memory).
+- `monitoring/grafana/provisioning/datasources/prometheus.yml` ✓ — Auto-provisions Prometheus as the default Grafana data source.
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml` ✓ — Auto-provisions the Goauth dashboard on Grafana startup.
+- `docker-compose.yml` ✓ — Added `prometheus` (port 9090) and `grafana` (port 3000) services with persistent volumes and auto-provisioning mounts. `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` env vars configurable via `.env`.
+
+**Metrics Instrumented:**
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `goauth_http_requests_total` | Counter | method, path, status_code | Every HTTP request |
+| `goauth_http_request_duration_seconds` | Histogram | method, path | Request latency (p50/p95/p99) |
+| `goauth_tokens_issued_total` | Counter | — | Successful token exchanges |
+| `goauth_token_revocations_total` | Counter | — | Explicit token revocations via logout |
+| `goauth_auth_failures_total` | Counter | reason | JWT failures (missing_token, malformed_header, invalid_token, revoked_token) |
+| `goauth_rate_limit_violations_total` | Counter | limiter_type (ip/user) | Rate-limit rejections |
+| `goauth_csrf_violations_total` | Counter | — | CSRF double-submit failures |
+| `goauth_admin_access_denied_total` | Counter | — | Admin middleware 403s |
+| Standard Go/process metrics | — | — | Goroutines, heap, GC, process RSS (via collectors) |
+
+**Notes:**
+- The metrics registry is app-scoped (`prometheus.NewRegistry()`), not the default global registry, so third-party library metrics are excluded from `/metrics`.
+- `sync.Once` ensures `setup()` runs at most once per process lifetime; the package `init()` triggers it on import so tests work without an explicit `Init()` call.
+- `MetricsMiddleware` uses `c.FullPath()` (Gin's matched route template, e.g. `/api/v1/clients/:client_id`) rather than the raw URL to prevent label cardinality explosion from UUID path parameters.
+- All existing middleware and handler tests continue to pass (170+ tests) after the instrumentation changes.
 
 ### 7.9 Task 6.9: Update README
 
@@ -1766,7 +1794,7 @@ WHERE id = $1;
 - [x] Docker Compose configured — Task 6.5 ✓
 - [x] Deployment scripts ready — Task 6.6 ✓
 - [x] CI/CD pipeline operational — Task 6.7 ✓
-- [ ] Monitoring configured
+- [x] Monitoring configured — Task 6.8 ✓
 - [ ] README updated
 - [ ] All documentation reviewed
 

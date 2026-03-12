@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SamuelWang/goauth-server/internal/metrics"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
@@ -106,6 +107,7 @@ func RateLimitByIP(perMin int, burst int) gin.HandlerFunc {
 
 		if !limiter.Allow() {
 			util.LogRateLimitExceeded(ip, c.GetString("request_id"), "", c.Request.URL.Path)
+			metrics.RateLimitViolationsTotal.WithLabelValues("ip").Inc()
 			c.Header("Retry-After", retryAfterSeconds(limiter))
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":             "too_many_requests",
@@ -145,6 +147,7 @@ func RateLimitByUser(perMin int, burst int) gin.HandlerFunc {
 				userIDForLog, _ = userID.(string)
 			}
 			util.LogRateLimitExceeded(c.ClientIP(), c.GetString("request_id"), userIDForLog, c.Request.URL.Path)
+			metrics.RateLimitViolationsTotal.WithLabelValues("user").Inc()
 			c.Header("Retry-After", retryAfterSeconds(limiter))
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":             "too_many_requests",

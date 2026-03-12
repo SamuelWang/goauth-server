@@ -58,6 +58,10 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	// Create Gin router
 	r := gin.New()
 
+	// Record latency and status of every request (must come before route
+	// groups so all paths are covered, including /ops/health and /metrics).
+	r.Use(middleware.MetricsMiddleware())
+
 	// Apply CORS globally so preflight OPTIONS requests are handled before any
 	// route-group middleware (auth, rate limiting, etc.) intercepts them.
 	r.Use(middleware.CORSMiddleware(cfg.Security.CORSAllowedOrigins, cfg.Server.Env))

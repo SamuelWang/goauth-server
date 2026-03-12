@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 
+	"github.com/SamuelWang/goauth-server/internal/metrics"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 )
@@ -79,6 +80,7 @@ func CSRFMiddleware() gin.HandlerFunc {
 			if headerToken == "" || !secureCompare(headerToken, cookieToken) {
 				userID := c.GetString("user_id")
 				util.LogCSRFViolation(c.ClientIP(), c.GetString("request_id"), userID, c.Request.Method, c.Request.URL.Path)
+				metrics.CSRFViolationsTotal.Inc()
 				c.JSON(http.StatusForbidden, gin.H{
 					"error":             "forbidden",
 					"error_description": "invalid or missing CSRF token",

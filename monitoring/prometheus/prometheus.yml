@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: goauth-server
+    environment: development
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # Uncomment and configure when Alertmanager is deployed:
+          # - targets: ['alertmanager:9093']
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: goauth_server
+    static_configs:
+      - targets: ["server:8080"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+    # Rename the default instance label to match service naming conventions.
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: "(.+):.*"
+        replacement: "$1"
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
