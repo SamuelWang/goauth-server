@@ -1,5 +1,9 @@
 # goauth-server
 
+[![CI](https://github.com/SamuelWang/goauth-server/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelWang/goauth-server/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://golang.org/dl/)
+[![License](https://img.shields.io/github/license/SamuelWang/goauth-server)](LICENSE)
+
 A Golang service of the auth platform.
 
 ## Setup Instructions

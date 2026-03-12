@@ -3,11 +3,11 @@
 package mocks
 
 import (
-"context"
+	"context"
 
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/google/uuid"
-"github.com/stretchr/testify/mock"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 )
 
 // MockQuerier is a testify mock that implements repository.Querier.
