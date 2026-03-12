@@ -13,6 +13,7 @@ services:
 
   # ─── PostgreSQL Database ──────────────────────────────────────────────────
   postgres:
+    container_name: goauth_postgres
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${DB_USER:-goauth}
@@ -20,6 +21,8 @@ services:
       POSTGRES_DB: ${DB_NAME:-goauth}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:${DB_PORT:-5432}"
     healthcheck:
       # Use the container's own POSTGRES_USER / POSTGRES_DB env vars for reliability
       # $$ escapes the variable so Docker Compose passes it to the container shell
@@ -37,6 +40,7 @@ services:
   # The service exits with code 0 once migrations succeed; the server waits
   # for this (service_completed_successfully) before starting.
   migrate:
+    container_name: goauth_migrate
     image: migrate/migrate:4
     command:
       - "-path=/migrations"
@@ -53,9 +57,11 @@ services:
 
   # ─── Goauth API Server ────────────────────────────────────────────────────
   server:
+    container_name: goauth_server
     build:
       context: .
       dockerfile: Dockerfile
+    image: goauth-server:latest
     environment:
       # Application
       APP_NAME: ${APP_NAME:-goauth-server}
@@ -69,7 +75,7 @@ services:
 
       # Database – always point at the postgres service inside the Docker network
       DB_HOST: postgres
-      DB_PORT: "5432"
+      DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER:-goauth}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}
       DB_NAME: ${DB_NAME:-goauth}
@@ -106,6 +112,7 @@ services:
   # Scrapes metrics from /metrics on the server service every 15 seconds and
   # evaluates the alert rules defined in monitoring/prometheus/alerts.yml.
   prometheus:
+    container_name: goauth_prometheus
     image: prom/prometheus:v3.4.0
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -128,10 +135,11 @@ services:
   # Provides dashboards for the Prometheus metrics.  The Prometheus data source
   # and the Goauth dashboard are provisioned automatically on startup.
   grafana:
+    container_name: goauth_grafana
     image: grafana/grafana:11.6.1
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required – set it in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/"
     volumes:

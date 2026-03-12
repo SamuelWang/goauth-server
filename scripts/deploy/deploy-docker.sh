@@ -185,6 +185,7 @@ done
 
 log_success "Deployment complete!"
 echo ""
+echo "  Postgres: http://localhost:${DB_PORT:-5432}"
 echo "  API:      http://localhost:${PORT}/api/v1"
 echo "  Docs:     http://localhost:${PORT}/api/docs/index.html"
 echo "  Health:   http://localhost:${PORT}/ops/health"
