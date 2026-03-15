@@ -286,6 +286,7 @@ goauth-server/
 │   ├── queries/              # sqlc SQL query definitions
 │   └── schema/               # Dumped database schema
 ├── docs/                     # Project documentation (guides, design docs)
+├── docs-planning/            # Documentation planning files
 ├── docs-swagger/             # Auto-generated OpenAPI spec (swag init output)
 ├── internal/
 │   ├── app/auth-server/      # Server bootstrapping (dependency wiring, Gin setup)
