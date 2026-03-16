@@ -48,6 +48,22 @@ func (h *WebHandler) Login(c *gin.Context) {
 		return
 	}
 
+	callbackURL := h.buildCallbackURL(clientID, providerName)
+
+	authURL, err := h.authService.InitiateAuthorization(
+		c.Request.Context(),
+		clientID,
+		providerName,
+		callbackURL,
+		redirectURI,
+		state,
+		scopePtr,
+	)
+	if err != nil {
+		h.handleLoginError(c, err)
+		return
+	}
+
 	// Build the signed session cookie so the callback can reconstruct context.
 	session := oauthSession{
 		State:       state,
@@ -70,22 +86,6 @@ func (h *WebHandler) Login(c *gin.Context) {
 		getCookieSecure(c),
 		true, // HttpOnly
 	)
-
-	callbackURL := h.buildCallbackURL(clientID, providerName)
-
-	authURL, err := h.authService.InitiateAuthorization(
-		c.Request.Context(),
-		clientID,
-		providerName,
-		callbackURL,
-		redirectURI,
-		state,
-		scopePtr,
-	)
-	if err != nil {
-		h.handleLoginError(c, err)
-		return
-	}
 
 	c.Redirect(http.StatusTemporaryRedirect, authURL)
 }
