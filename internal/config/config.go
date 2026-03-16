@@ -10,7 +10,6 @@ type Config struct {
 	App         AppConfig
 	Server      ServerConfig
 	Database    DatabaseConfig
-	OAuth       OAuthConfig
 	AccessToken AccessTokenConfig
 	Security    SecurityConfig
 }
@@ -34,17 +33,6 @@ type DatabaseConfig struct {
 	Password string
 	DBName   string
 	SSLMode  string
-}
-
-type OAuthConfig struct {
-	Google GoogleOAuthConfig
-}
-
-type GoogleOAuthConfig struct {
-	Enabled      bool
-	ClientID     string
-	ClientSecret string
-	Scopes       []string
 }
 
 type AccessTokenConfig struct {
@@ -91,18 +79,6 @@ func Load() (*Config, error) {
 			DBName:   getEnv("DB_NAME", "goauth"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
-		OAuth: OAuthConfig{
-			Google: GoogleOAuthConfig{
-				Enabled:      getEnv("GOOGLE_ENABLED", "false") == "true",
-				ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-				ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-				Scopes: []string{
-					"openid",
-					"https://www.googleapis.com/auth/userinfo.email",
-					"https://www.googleapis.com/auth/userinfo.profile",
-				},
-			},
-		},
 		AccessToken: AccessTokenConfig{
 			PrivateKey: getEnv("ACCESS_TOKEN_PRIVATE_KEY", ""),
 			PublicKey:  getEnv("ACCESS_TOKEN_PUBLIC_KEY", ""),
@@ -113,16 +89,6 @@ func Load() (*Config, error) {
 			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
 			CORSAllowedOrigins:    getEnvAsStringSlice("CORS_ALLOWED_ORIGINS"),
 		},
-	}
-
-	// Validate required fields
-	if cfg.OAuth.Google.Enabled {
-		if cfg.OAuth.Google.ClientID == "" {
-			return nil, fmt.Errorf("GOOGLE_CLIENT_ID is required")
-		}
-		if cfg.OAuth.Google.ClientSecret == "" {
-			return nil, fmt.Errorf("GOOGLE_CLIENT_SECRET is required")
-		}
 	}
 
 	if cfg.AccessToken.PrivateKey == "" {

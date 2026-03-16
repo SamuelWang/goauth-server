@@ -24,7 +24,3 @@ data:
   ACCESS_TOKEN_EXPIRY_MINUTES: "60"
   # CORS: comma-separated list of allowed origins
   CORS_ALLOWED_ORIGINS: "https://app.example.com"
-  # Google OAuth (optional)
-  GOOGLE_ENABLED: "false"
-  GOOGLE_CLIENT_ID: ""
-  GOOGLE_CLIENT_SECRET: ""

@@ -602,63 +602,6 @@ func TestNew_Constructor(t *testing.T) {
 	require.NotNil(t, svc)
 }
 
-// --- Google OAuth ---
-
-func TestGetGoogleLoginURL_Disabled(t *testing.T) {
-	q := &mocks.MockQuerier{}
-	psvc := &mockProviderService{}
-	svc := newTestService(t, q, psvc)
-	// Default cfg has Google disabled (Enabled: false).
-	_, err := svc.GetGoogleLoginURL("state123")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Google OAuth is not enabled")
-}
-
-func TestGetGoogleLoginURL_Enabled(t *testing.T) {
-	q := &mocks.MockQuerier{}
-	psvc := &mockProviderService{}
-	privPEM, pubPEM := generateTestPEMKeys(t)
-	cfg := &config.Config{
-		App: config.AppConfig{Name: "test"},
-		Server: config.ServerConfig{
-			Scheme:   "https",
-			HostName: "example.com",
-			Port:     "443",
-		},
-		AccessToken: config.AccessTokenConfig{
-			PrivateKey: privPEM,
-			PublicKey:  pubPEM,
-			Expiry:     60,
-		},
-		OAuth: config.OAuthConfig{
-			Google: config.GoogleOAuthConfig{
-				Enabled:      true,
-				ClientID:     "test-client-id",
-				ClientSecret: "test-client-secret",
-				Scopes:       []string{"openid", "email"},
-			},
-		},
-	}
-	svc, err := New(q, cfg, psvc)
-	require.NoError(t, err)
-	require.NotNil(t, svc)
-
-	url, err := svc.GetGoogleLoginURL("mystate")
-	require.NoError(t, err)
-	assert.Contains(t, url, "accounts.google.com")
-	assert.Contains(t, url, "mystate")
-}
-
-func TestHandleGoogleCallback_Disabled(t *testing.T) {
-	q := &mocks.MockQuerier{}
-	psvc := &mockProviderService{}
-	svc := newTestService(t, q, psvc)
-	// Default cfg has Google disabled.
-	_, err := svc.HandleGoogleCallback(context.Background(), "code123")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Google OAuth is not enabled")
-}
-
 // --- upsertUser: existing user path ---
 
 func TestHandleProviderCallback_ExistingUser(t *testing.T) {

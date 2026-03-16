@@ -321,28 +321,6 @@ Returns the configured access token lifetime as a `time.Duration`.
 
 ---
 
-### Legacy Google OIDC Flow
-
-These methods implement a simplified Google-specific login path that predates the generic provider flow.
-
-#### `GetGoogleLoginURL`
-
-```go
-func (s *Service) GetGoogleLoginURL(state string) (string, error)
-```
-
-Returns the Google OAuth 2.0 authorization URL for the configured application. Returns an error if Google OAuth is not configured.
-
-#### `HandleGoogleCallback`
-
-```go
-func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (string, error)
-```
-
-Exchanges the Google authorization code for tokens, verifies the ID token with the OIDC provider, upserts the user, and returns a signed JWT.
-
----
-
 ### Auth Sentinel Errors
 
 | Symbol | Description |
