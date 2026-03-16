@@ -1,17 +1,17 @@
 package session
 
 import (
-"context"
-"errors"
-"testing"
-"time"
+	"context"
+	"errors"
+	"testing"
+	"time"
 
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
-"github.com/google/uuid"
-"github.com/jackc/pgx/v5"
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/require"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestSession() (*Service, *mocks.MockQuerier) {
@@ -80,7 +80,7 @@ func TestListAuthorizationCodes_WithClientIDFilter(t *testing.T) {
 	m.On("CountAuthorizationCodes", ctx, countParams).Return(int64(0), nil)
 
 	result, err := svc.ListAuthorizationCodes(ctx, ListAuthorizationCodesParams{
-ClientID: &clientID,
+		ClientID: &clientID,
 		Limit:    5,
 	})
 	require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestListAccessTokens_WithUserIDFilter(t *testing.T) {
 	m.On("CountAccessTokens", ctx, countParams).Return(int64(0), nil)
 
 	result, err := svc.ListAccessTokens(ctx, ListAccessTokensParams{
-UserID: &userID,
+		UserID: &userID,
 		Limit:  10,
 	})
 	require.NoError(t, err)

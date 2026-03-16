@@ -1,15 +1,15 @@
 package handler_test
 
 import (
-"net/http"
-"testing"
-"time"
+	"net/http"
+	"testing"
+	"time"
 
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/google/uuid"
-"github.com/jackc/pgx/v5"
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/mock"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 // buildAuthorizationCodeRow creates a repository.AuthorizationCode suitable for mock responses.
@@ -53,10 +53,10 @@ func TestListAuthorizationCodes_Success(t *testing.T) {
 
 	codeID := uuid.New()
 	env.mockQ.On("ListAuthorizationCodes", mock.Anything, repository.ListAuthorizationCodesParams{
-Limit:  20,
-Offset: 0,
-}).Return([]repository.AuthorizationCode{
-buildAuthorizationCodeRow(codeID, uuid.New(), uuid.New(), uuid.New()),
+		Limit:  20,
+		Offset: 0,
+	}).Return([]repository.AuthorizationCode{
+		buildAuthorizationCodeRow(codeID, uuid.New(), uuid.New(), uuid.New()),
 	}, nil)
 	env.mockQ.On("CountAuthorizationCodes", mock.Anything, repository.CountAuthorizationCodesParams{}).
 		Return(int64(1), nil)
@@ -97,13 +97,13 @@ func TestListAuthorizationCodes_FilterByClientID(t *testing.T) {
 	filterClientID := uuid.New()
 
 	env.mockQ.On("ListAuthorizationCodes", mock.Anything, repository.ListAuthorizationCodesParams{
-Column1: filterClientID,
-Limit:   20,
-Offset:  0,
-}).Return([]repository.AuthorizationCode{}, nil)
+		Column1: filterClientID,
+		Limit:   20,
+		Offset:  0,
+	}).Return([]repository.AuthorizationCode{}, nil)
 	env.mockQ.On("CountAuthorizationCodes", mock.Anything, repository.CountAuthorizationCodesParams{
-Column1: filterClientID,
-}).Return(int64(0), nil)
+		Column1: filterClientID,
+	}).Return(int64(0), nil)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/codes?client_id="+filterClientID.String(), nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -124,13 +124,13 @@ func TestListAuthorizationCodes_FilterByRevoked(t *testing.T) {
 
 	isRevoked := true
 	env.mockQ.On("ListAuthorizationCodes", mock.Anything, repository.ListAuthorizationCodesParams{
-Column3: isRevoked,
-Limit:   20,
-Offset:  0,
-}).Return([]repository.AuthorizationCode{}, nil)
+		Column3: isRevoked,
+		Limit:   20,
+		Offset:  0,
+	}).Return([]repository.AuthorizationCode{}, nil)
 	env.mockQ.On("CountAuthorizationCodes", mock.Anything, repository.CountAuthorizationCodesParams{
-Column3: isRevoked,
-}).Return(int64(0), nil)
+		Column3: isRevoked,
+	}).Return(int64(0), nil)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/codes?is_revoked=true", nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -185,10 +185,10 @@ func TestListAccessTokens_Success(t *testing.T) {
 
 	tokenID := uuid.New()
 	env.mockQ.On("ListAccessTokens", mock.Anything, repository.ListAccessTokensParams{
-Limit:  20,
-Offset: 0,
-}).Return([]repository.AccessToken{
-buildAccessTokenSessionRow(tokenID, uuid.New(), uuid.New()),
+		Limit:  20,
+		Offset: 0,
+	}).Return([]repository.AccessToken{
+		buildAccessTokenSessionRow(tokenID, uuid.New(), uuid.New()),
 	}, nil)
 	env.mockQ.On("CountAccessTokens", mock.Anything, repository.CountAccessTokensParams{}).
 		Return(int64(1), nil)
@@ -229,13 +229,13 @@ func TestListAccessTokens_FilterByUserID(t *testing.T) {
 	filterUserID := uuid.New()
 
 	env.mockQ.On("ListAccessTokens", mock.Anything, repository.ListAccessTokensParams{
-Column2: filterUserID,
-Limit:   20,
-Offset:  0,
-}).Return([]repository.AccessToken{}, nil)
+		Column2: filterUserID,
+		Limit:   20,
+		Offset:  0,
+	}).Return([]repository.AccessToken{}, nil)
 	env.mockQ.On("CountAccessTokens", mock.Anything, repository.CountAccessTokensParams{
-Column2: filterUserID,
-}).Return(int64(0), nil)
+		Column2: filterUserID,
+	}).Return(int64(0), nil)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/tokens?user_id="+filterUserID.String(), nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -258,10 +258,10 @@ func TestListAccessTokens_ResponseOmitsTokenHash(t *testing.T) {
 	tokenID := uuid.New()
 
 	env.mockQ.On("ListAccessTokens", mock.Anything, repository.ListAccessTokensParams{
-Limit:  20,
-Offset: 0,
-}).Return([]repository.AccessToken{
-buildAccessTokenSessionRow(tokenID, uuid.New(), uuid.New()),
+		Limit:  20,
+		Offset: 0,
+	}).Return([]repository.AccessToken{
+		buildAccessTokenSessionRow(tokenID, uuid.New(), uuid.New()),
 	}, nil)
 	env.mockQ.On("CountAccessTokens", mock.Anything, repository.CountAccessTokensParams{}).
 		Return(int64(1), nil)

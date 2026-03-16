@@ -1,14 +1,14 @@
 package handler_test
 
 import (
-"net/http"
-"testing"
+	"net/http"
+	"testing"
 
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/google/uuid"
-"github.com/jackc/pgx/v5"
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/mock"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ func TestListProviders_Success(t *testing.T) {
 
 	env.mockQ.On("ListOAuthProvidersByClient", mock.Anything, clientID).
 		Return([]repository.OauthProvider{
-buildOAuthProvider(uuid.New(), clientID, "google"),
+			buildOAuthProvider(uuid.New(), clientID, "google"),
 			buildOAuthProvider(uuid.New(), clientID, "github"),
 		}, nil)
 
@@ -73,7 +73,7 @@ func TestListProviders_ExcludesCredentials(t *testing.T) {
 
 	env.mockQ.On("ListOAuthProvidersByClient", mock.Anything, clientID).
 		Return([]repository.OauthProvider{
-buildOAuthProvider(uuid.New(), clientID, "google"),
+			buildOAuthProvider(uuid.New(), clientID, "google"),
 		}, nil)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/clients/"+clientID.String()+"/providers", nil, token)
@@ -101,7 +101,7 @@ func TestGetProvider_Success(t *testing.T) {
 	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodGet,
-"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
 		nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -126,7 +126,7 @@ func TestGetProvider_NotFound(t *testing.T) {
 	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(repository.OauthProvider{}, pgx.ErrNoRows)
 
 	w := env.doAuthRequest(http.MethodGet,
-"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
 		nil, token)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -145,7 +145,7 @@ func TestGetProvider_WrongClient(t *testing.T) {
 	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodGet,
-"/api/v1/clients/"+requestedClientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+requestedClientID.String()+"/providers/"+providerID.String(),
 		nil, token)
 	// The handler validates client ownership and returns 404 to avoid information leakage.
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -166,7 +166,7 @@ func TestCreateProvider_Success(t *testing.T) {
 		Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodPost,
-"/api/v1/clients/"+clientID.String()+"/providers",
+		"/api/v1/clients/"+clientID.String()+"/providers",
 		map[string]interface{}{
 			"name":                   "google",
 			"display_name":           "Google",
@@ -198,7 +198,7 @@ func TestCreateProvider_MissingRequiredFields(t *testing.T) {
 	clientID := uuid.New()
 
 	w := env.doAuthRequest(http.MethodPost,
-"/api/v1/clients/"+clientID.String()+"/providers",
+		"/api/v1/clients/"+clientID.String()+"/providers",
 		map[string]interface{}{
 			"name": "google",
 			// missing required fields
@@ -217,7 +217,7 @@ func TestCreateProvider_ResponseExcludesCredentials(t *testing.T) {
 		Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodPost,
-"/api/v1/clients/"+clientID.String()+"/providers",
+		"/api/v1/clients/"+clientID.String()+"/providers",
 		map[string]interface{}{
 			"name":                   "google",
 			"display_name":           "Google",
@@ -254,7 +254,7 @@ func TestUpdateProvider_Success(t *testing.T) {
 		Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodPatch,
-"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
 		map[string]interface{}{
 			"display_name":           "Google Updated",
 			"provider_client_id":     "client-123",
@@ -282,7 +282,7 @@ func TestUpdateProvider_WrongClient(t *testing.T) {
 	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(pRow, nil)
 
 	w := env.doAuthRequest(http.MethodPatch,
-"/api/v1/clients/"+wrongClientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+wrongClientID.String()+"/providers/"+providerID.String(),
 		map[string]interface{}{
 			"display_name":       "Google Updated",
 			"provider_client_id": "client-123",
@@ -313,7 +313,7 @@ func TestDeleteProvider_Success(t *testing.T) {
 	env.mockQ.On("DeleteOAuthProvider", mock.Anything, providerID).Return(nil)
 
 	w := env.doAuthRequest(http.MethodDelete,
-"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
 		nil, token)
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	env.mockQ.AssertExpectations(t)
@@ -328,7 +328,7 @@ func TestDeleteProvider_NotFound(t *testing.T) {
 	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(repository.OauthProvider{}, pgx.ErrNoRows)
 
 	w := env.doAuthRequest(http.MethodDelete,
-"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
+		"/api/v1/clients/"+clientID.String()+"/providers/"+providerID.String(),
 		nil, token)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -336,30 +336,30 @@ func TestDeleteProvider_NotFound(t *testing.T) {
 // TestDeleteProvider_CrossClientIsolation verifies that providers cannot be
 // deleted using a different client's ID.
 func TestDeleteProvider_CrossClientIsolation(t *testing.T) {
-env := newTestEnv(t)
-token, _ := adminAuthSetup(t, env)
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
 
-ownerClientID := uuid.New()
-attackerClientID := uuid.New()
-providerID := uuid.New()
-pRow := buildOAuthProvider(providerID, ownerClientID, "google")
+	ownerClientID := uuid.New()
+	attackerClientID := uuid.New()
+	providerID := uuid.New()
+	pRow := buildOAuthProvider(providerID, ownerClientID, "google")
 
-env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(pRow, nil)
+	env.mockQ.On("GetOAuthProvider", mock.Anything, providerID).Return(pRow, nil)
 
-w := env.doAuthRequest(http.MethodDelete,
-"/api/v1/clients/"+attackerClientID.String()+"/providers/"+providerID.String(),
-nil, token)
-// ErrProviderClientMismatch is surfaced as 404
-assert.Equal(t, http.StatusNotFound, w.Code)
+	w := env.doAuthRequest(http.MethodDelete,
+		"/api/v1/clients/"+attackerClientID.String()+"/providers/"+providerID.String(),
+		nil, token)
+	// ErrProviderClientMismatch is surfaced as 404
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestDeleteProvider_InvalidProviderID(t *testing.T) {
-env := newTestEnv(t)
-token, _ := adminAuthSetup(t, env)
-clientID := uuid.New()
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+	clientID := uuid.New()
 
-w := env.doAuthRequest(http.MethodDelete,
-"/api/v1/clients/"+clientID.String()+"/providers/not-a-uuid",
-nil, token)
-assert.Equal(t, http.StatusBadRequest, w.Code)
+	w := env.doAuthRequest(http.MethodDelete,
+		"/api/v1/clients/"+clientID.String()+"/providers/not-a-uuid",
+		nil, token)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

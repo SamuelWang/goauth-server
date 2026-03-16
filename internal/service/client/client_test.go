@@ -1,20 +1,20 @@
 package client
 
 import (
-"context"
-"errors"
-"testing"
-"time"
+	"context"
+	"errors"
+	"testing"
+	"time"
 
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
-"github.com/google/uuid"
-"github.com/jackc/pgx/v5"
-"github.com/jackc/pgx/v5/pgconn"
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/mock"
-"golang.org/x/crypto/bcrypt"
-"github.com/stretchr/testify/require"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestService(q *mocks.MockQuerier) *Service {
@@ -42,10 +42,10 @@ func TestListClients_DefaultsToActive(t *testing.T) {
 	row := sampleClient()
 	q := &mocks.MockQuerier{}
 	q.On("ListClients", mock.Anything, repository.ListClientsParams{
-Column1: true,
-Limit:   20,
-Offset:  0,
-}).Return([]repository.Client{row}, nil)
+		Column1: true,
+		Limit:   20,
+		Offset:  0,
+	}).Return([]repository.Client{row}, nil)
 	q.On("CountClients", mock.Anything, true).Return(int64(1), nil)
 
 	svc := newTestService(q)
@@ -107,7 +107,7 @@ func TestCreateClient_Success(t *testing.T) {
 
 	q := &mocks.MockQuerier{}
 	q.On("CreateClient", mock.Anything, mock.MatchedBy(func(p repository.CreateClientParams) bool {
-return p.Name == dto.Name && p.CreatedBy == adminID && p.ClientSecretHash != ""
+		return p.Name == dto.Name && p.CreatedBy == adminID && p.ClientSecretHash != ""
 	})).Return(row, nil)
 
 	svc := newTestService(q)
@@ -191,12 +191,12 @@ func TestUpdateClient_Success(t *testing.T) {
 	updated.Name = dto.Name
 	q := &mocks.MockQuerier{}
 	q.On("UpdateClient", mock.Anything, repository.UpdateClientParams{
-ID:           row.ID,
-Name:         dto.Name,
-Description:  nil,
-RedirectUris: dto.RedirectURIs,
-GrantTypes:   dto.GrantTypes,
-}).Return(updated, nil)
+		ID:           row.ID,
+		Name:         dto.Name,
+		Description:  nil,
+		RedirectUris: dto.RedirectURIs,
+		GrantTypes:   dto.GrantTypes,
+	}).Return(updated, nil)
 
 	svc := newTestService(q)
 	c, err := svc.UpdateClient(context.Background(), row.ID, dto)
@@ -245,7 +245,7 @@ func TestRegenerateSecret_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	q.On("GetClient", mock.Anything, row.ID).Return(row, nil)
 	q.On("RegenerateClientSecret", mock.Anything, mock.MatchedBy(func(p repository.RegenerateClientSecretParams) bool {
-return p.ID == row.ID && p.ClientSecretHash != ""
+		return p.ID == row.ID && p.ClientSecretHash != ""
 	})).Return(row, nil)
 
 	svc := newTestService(q)
@@ -339,8 +339,8 @@ func TestUpdateClient_ValidationErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-dto := base
-tc.patch(&dto)
+			dto := base
+			tc.patch(&dto)
 			svc := newTestService(&mocks.MockQuerier{})
 			_, err := svc.UpdateClient(context.Background(), uuid.New(), dto)
 			require.Error(t, err)
