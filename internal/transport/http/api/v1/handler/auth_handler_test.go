@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -504,4 +505,70 @@ func buildExpiredJWT(t *testing.T, env *testEnv) string {
 	signed, err := tok.SignedString(env.privKey)
 	require.NoError(t, err)
 	return signed
+}
+
+// ---------------------------------------------------------------------------
+// handleTokenExchangeError default path
+// ---------------------------------------------------------------------------
+
+// TestTokenExchange_ServerError exercises the default/server_error branch in
+// handleTokenExchangeError by returning an unexpected error from the repo.
+func TestTokenExchange_ServerError(t *testing.T) {
+	env := newTestEnv(t)
+	redirectURI := "https://app.example.com/callback"
+	cl, plainSecret := buildActiveClientWithSecret(t, redirectURI)
+
+	env.mockQ.On("GetClient", mock.Anything, cl.ID).Return(cl, nil)
+	env.mockQ.On("GetAuthorizationCode", mock.Anything, "some-code").
+		Return(repository.AuthorizationCode{}, errors.New("unexpected db error"))
+
+	w := env.doRequest(http.MethodPost, "/api/v1/auth/token", map[string]interface{}{
+		"grant_type":    "authorization_code",
+		"code":          "some-code",
+		"client_id":     cl.ID.String(),
+		"client_secret": plainSecret,
+		"redirect_uri":  redirectURI,
+	})
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var resp map[string]string
+	parseJSON(t, w, &resp)
+	assert.Equal(t, "server_error", resp["error"])
+}
+
+// ---------------------------------------------------------------------------
+// GetCurrentUser error paths
+// ---------------------------------------------------------------------------
+
+// TestGetCurrentUser_UserNotFound covers the DB-error path in GetCurrentUser.
+func TestGetCurrentUser_UserNotFound(t *testing.T) {
+	env := newTestEnv(t)
+	userID := uuid.New()
+	token := env.generateToken(t, userID.String(), "user@example.com")
+	tokenRow := activeTokenRow(token, userID)
+
+	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil)
+	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(repository.User{}, pgx.ErrNoRows)
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/auth/me", nil, token)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// ---------------------------------------------------------------------------
+// ListEnabledProviders DB error
+// ---------------------------------------------------------------------------
+
+// TestListEnabledProviders_DBError covers the internal server error branch
+// when the provider store returns an error.
+func TestListEnabledProviders_DBError(t *testing.T) {
+	env := newTestEnv(t)
+	clientID := uuid.New()
+
+	env.mockQ.On("ListEnabledOAuthProvidersByClient", mock.Anything, clientID).
+		Return(nil, errors.New("db error"))
+
+	w := env.doRequest(http.MethodGet, "/api/v1/clients/"+clientID.String()+"/auth/providers", nil)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
 }

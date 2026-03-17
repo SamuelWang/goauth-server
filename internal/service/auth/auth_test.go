@@ -461,6 +461,115 @@ func TestRevokeToken_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrTokenNotFound)
 }
 
+// ---- RevokeRawToken ----
+
+func TestRevokeRawToken_Success(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "my-raw-access-token"
+	hash := tokenHash(rawToken)
+	tokenRow := repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: hash,
+	}
+	q.On("GetAccessToken", mock.Anything, hash).Return(tokenRow, nil)
+	q.On("RevokeAccessToken", mock.Anything, tokenRow.ID).Return(nil)
+
+	svc := newTestService(t, q, psvc)
+	err := svc.RevokeRawToken(context.Background(), rawToken)
+	require.NoError(t, err)
+	q.AssertExpectations(t)
+}
+
+func TestRevokeRawToken_NotFound(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "nonexistent-token"
+	hash := tokenHash(rawToken)
+	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
+
+	svc := newTestService(t, q, psvc)
+	err := svc.RevokeRawToken(context.Background(), rawToken)
+	assert.ErrorIs(t, err, ErrTokenNotFound)
+	q.AssertExpectations(t)
+}
+
+// ---- IsTokenRevoked ----
+
+func TestIsTokenRevoked_NotInDB_ReturnsRevoked(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "unknown-raw-token"
+	hash := tokenHash(rawToken)
+	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
+
+	svc := newTestService(t, q, psvc)
+	revoked, err := svc.IsTokenRevoked(context.Background(), rawToken)
+	require.NoError(t, err)
+	assert.True(t, revoked, "token not in DB should be treated as revoked")
+	q.AssertExpectations(t)
+}
+
+func TestIsTokenRevoked_ActiveToken_ReturnsFalse(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "active-raw-token"
+	hash := tokenHash(rawToken)
+	isRevoked := false
+	tokenRow := repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: hash,
+		IsRevoked: &isRevoked,
+	}
+	q.On("GetAccessToken", mock.Anything, hash).Return(tokenRow, nil)
+
+	svc := newTestService(t, q, psvc)
+	revoked, err := svc.IsTokenRevoked(context.Background(), rawToken)
+	require.NoError(t, err)
+	assert.False(t, revoked)
+	q.AssertExpectations(t)
+}
+
+func TestIsTokenRevoked_RevokedToken_ReturnsTrue(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "revoked-raw-token"
+	hash := tokenHash(rawToken)
+	isRevoked := true
+	tokenRow := repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: hash,
+		IsRevoked: &isRevoked,
+	}
+	q.On("GetAccessToken", mock.Anything, hash).Return(tokenRow, nil)
+
+	svc := newTestService(t, q, psvc)
+	revoked, err := svc.IsTokenRevoked(context.Background(), rawToken)
+	require.NoError(t, err)
+	assert.True(t, revoked)
+	q.AssertExpectations(t)
+}
+
+func TestIsTokenRevoked_RepoError(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	rawToken := "error-token"
+	hash := tokenHash(rawToken)
+	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, errors.New("db error"))
+
+	svc := newTestService(t, q, psvc)
+	_, err := svc.IsTokenRevoked(context.Background(), rawToken)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "looking up access token")
+	q.AssertExpectations(t)
+}
+
 // ---- ValidateAccessToken ----
 
 func TestValidateAccessToken_ValidToken(t *testing.T) {

@@ -80,6 +80,64 @@ func TestSecurityHeaders_CSP(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// MaxBodySizeMiddleware
+// ---------------------------------------------------------------------------
+
+func setupMaxBodyRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(MaxBodySizeMiddleware())
+	r.POST("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	return r
+}
+
+// TestMaxBodySize_AllowsSmallBody verifies that a POST with a body well below
+// the 1 MiB limit is passed through normally.
+func TestMaxBodySize_AllowsSmallBody(t *testing.T) {
+	r := setupMaxBodyRouter()
+
+	req, err := http.NewRequest(http.MethodPost, "/test", nil)
+	require.NoError(t, err)
+	req.ContentLength = 512 // 512 bytes – well within limit
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestMaxBodySize_Rejects413WhenTooLarge verifies that a POST with a
+// Content-Length header that exceeds 1 MiB is rejected with 413.
+func TestMaxBodySize_Rejects413WhenTooLarge(t *testing.T) {
+	r := setupMaxBodyRouter()
+
+	req, err := http.NewRequest(http.MethodPost, "/test", nil)
+	require.NoError(t, err)
+	req.ContentLength = 2 << 20 // 2 MiB – over the 1 MiB limit
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+}
+
+// TestMaxBodySize_ErrorBody verifies the JSON error message on a 413.
+func TestMaxBodySize_ErrorBody(t *testing.T) {
+	r := setupMaxBodyRouter()
+
+	req, err := http.NewRequest(http.MethodPost, "/test", nil)
+	require.NoError(t, err)
+	req.ContentLength = 2 << 20
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Contains(t, w.Body.String(), "request body too large")
+}
+
+// ---------------------------------------------------------------------------
 // Strict-Transport-Security
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -233,4 +234,41 @@ func TestUpdateUserStatus_NonAdmin(t *testing.T) {
 	w := env.doAuthRequest(http.MethodPatch, "/api/v1/users/"+userID.String(),
 		map[string]interface{}{"is_active": false}, token)
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// handleUserError internal server error, ListUsers DB error
+// ---------------------------------------------------------------------------
+
+// TestUpdateUserStatus_DBError exercises the default/500 branch in handleUserError.
+func TestUpdateUserStatus_DBError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+	userID := uuid.New()
+
+	env.mockQ.On("UpdateUserActiveStatus", mock.Anything, repository.UpdateUserActiveStatusParams{
+		ID:       userID,
+		IsActive: false,
+	}).Return(repository.User{}, errors.New("unexpected db error"))
+
+	w := env.doAuthRequest(http.MethodPatch, "/api/v1/users/"+userID.String(),
+		map[string]interface{}{"is_active": false}, token)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestListUsers_DBError exercises the 500 branch of ListUsers.
+func TestListUsers_DBError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	env.mockQ.On("ListUsers", mock.Anything, repository.ListUsersParams{
+		Column1: true,
+		Limit:   20,
+		Offset:  0,
+	}).Return(nil, errors.New("database error"))
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/users", nil, token)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
 }

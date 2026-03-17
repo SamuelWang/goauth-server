@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -388,4 +390,69 @@ func TestDeleteClient_NonAdmin(t *testing.T) {
 
 	w := env.doAuthRequest(http.MethodDelete, "/api/v1/clients/"+uuid.New().String(), nil, token)
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// handleClientError coverage: conflict (duplicate name) and internal error
+// ---------------------------------------------------------------------------
+
+// TestCreateClient_DuplicateName exercises the 409 Conflict branch of handleClientError.
+func TestCreateClient_DuplicateName(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	dupErr := &pgconn.PgError{Code: "23505"}
+	env.mockQ.On("CreateClient", mock.Anything, mock.AnythingOfType("repository.CreateClientParams")).
+		Return(repository.Client{}, dupErr)
+
+	w := env.doAuthRequest(http.MethodPost, "/api/v1/clients", map[string]interface{}{
+		"name":          "duplicate-client",
+		"redirect_uris": []string{"https://app.example.com/callback"},
+		"grant_types":   []string{"authorization_code"},
+		"is_active":     true,
+	}, token)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	var resp map[string]string
+	parseJSON(t, w, &resp)
+	assert.Contains(t, resp["error"], "already exists")
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestCreateClient_InternalError exercises the 500 branch of handleClientError.
+func TestCreateClient_InternalError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	env.mockQ.On("CreateClient", mock.Anything, mock.AnythingOfType("repository.CreateClientParams")).
+		Return(repository.Client{}, errors.New("unexpected db failure"))
+
+	w := env.doAuthRequest(http.MethodPost, "/api/v1/clients", map[string]interface{}{
+		"name":          "a-client",
+		"redirect_uris": []string{"https://app.example.com/callback"},
+		"grant_types":   []string{"authorization_code"},
+		"is_active":     true,
+	}, token)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestUpdateClient_ValidationError exercises the 422 branch of handleClientError.
+func TestUpdateClient_ValidationError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	clientID := uuid.New()
+
+	// Send an invalid redirect_uri to trigger validation failure
+	w := env.doAuthRequest(http.MethodPatch, "/api/v1/clients/"+clientID.String(), map[string]interface{}{
+		"name":          "client",
+		"redirect_uris": []string{"not-a-valid-uri"},
+		"grant_types":   []string{"authorization_code"},
+	}, token)
+
+	// The service validates and returns a ValidationError → 422
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }

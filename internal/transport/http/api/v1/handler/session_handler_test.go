@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -320,4 +321,85 @@ func TestRevokeAccessToken_Unauthenticated(t *testing.T) {
 
 	w := env.doRequest(http.MethodDelete, "/api/v1/sessions/tokens/"+tokenID.String(), nil)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// handleSessionError internal error branches
+// ---------------------------------------------------------------------------
+
+// TestListAuthorizationCodes_DBError exercises the 500 branch of ListAuthorizationCodes.
+func TestListAuthorizationCodes_DBError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	env.mockQ.On("ListAuthorizationCodes", mock.Anything, repository.ListAuthorizationCodesParams{
+		Limit:  20,
+		Offset: 0,
+	}).Return(nil, errors.New("database error"))
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/codes", nil, token)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestListAccessTokens_DBError exercises the 500 branch of ListAccessTokens.
+func TestListAccessTokens_DBError(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	env.mockQ.On("ListAccessTokens", mock.Anything, repository.ListAccessTokensParams{
+		Limit:  20,
+		Offset: 0,
+	}).Return(nil, errors.New("database error"))
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/tokens", nil, token)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestListAuthorizationCodes_InvalidIsRevoked exercises the bad is_revoked parse branch.
+func TestListAuthorizationCodes_InvalidIsRevoked(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/codes?is_revoked=notbool", nil, token)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestListAccessTokens_InvalidIsRevoked exercises the bad is_revoked parse branch.
+func TestListAccessTokens_InvalidIsRevoked(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/tokens?is_revoked=notbool", nil, token)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestListAccessTokens_FilterByClientID exercises the client_id filter branch.
+func TestListAccessTokens_FilterByClientID(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+	filterClientID := uuid.New()
+
+	env.mockQ.On("ListAccessTokens", mock.Anything, repository.ListAccessTokensParams{
+		Column1: filterClientID,
+		Limit:   20,
+		Offset:  0,
+	}).Return([]repository.AccessToken{}, nil)
+	env.mockQ.On("CountAccessTokens", mock.Anything, repository.CountAccessTokensParams{
+		Column1: filterClientID,
+	}).Return(int64(0), nil)
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/tokens?client_id="+filterClientID.String(), nil, token)
+	assert.Equal(t, http.StatusOK, w.Code)
+	env.mockQ.AssertExpectations(t)
+}
+
+// TestListAccessTokens_InvalidClientID exercises the bad client_id parse branch.
+func TestListAccessTokens_InvalidClientID(t *testing.T) {
+	env := newTestEnv(t)
+	token, _ := adminAuthSetup(t, env)
+
+	w := env.doAuthRequest(http.MethodGet, "/api/v1/sessions/tokens?client_id=not-a-uuid", nil, token)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
