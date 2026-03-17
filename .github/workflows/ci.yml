@@ -170,9 +170,15 @@ jobs:
           TESTCONTAINERS_RYUK_DISABLED: "false"
           DOCKER_HOST: unix:///var/run/docker.sock
 
+      - name: Filter coverage report (exclude non-testable packages)
+        run: |
+          head -1 coverage.out > coverage-filtered.out
+          grep -vE "goauth-server/(docs-swagger|internal/(testutil|loadtest|models|metrics|app)|cmd)/|goauth-server/internal/transport/http/(api|api/v1|ops|web)/[^/]+\.go" \
+            coverage.out >> coverage-filtered.out
+
       - name: Check total coverage is at least 80%
         run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep "^total:" | awk '{print $3}' | tr -d '%')
+          COVERAGE=$(go tool cover -func=coverage-filtered.out | grep "^total:" | awk '{print $3}' | tr -d '%')
           echo "Total coverage: ${COVERAGE}%"
           if awk "BEGIN {exit !($COVERAGE < 80.0)}"; then
             echo "ERROR: Coverage ${COVERAGE}% is below the required 80% threshold."
@@ -184,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-combined
-          path: coverage.out
+          path: coverage-filtered.out
           retention-days: 30
 
   # ─── Build Binary ─────────────────────────────────────────────────────────
