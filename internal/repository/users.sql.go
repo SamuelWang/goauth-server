@@ -13,6 +13,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT
+  COUNT(*)
+FROM
+  users
+WHERE
+  ($1::boolean IS NULL OR is_active = $1)
+  AND ($2::boolean IS NULL OR is_admin = $2)
+`
+
+type CountUsersParams struct {
+	Column1 bool
+	Column2 bool
+}
+
+func (q *Queries) CountUsers(ctx context.Context, arg CountUsersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsers, arg.Column1, arg.Column2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO
   users (
@@ -29,7 +51,7 @@ INSERT INTO
 VALUES
   ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type CreateUserParams struct {
@@ -71,13 +93,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -103,13 +126,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -135,13 +159,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByProviderID = `-- name: GetUserByProviderID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 FROM
   users
 WHERE
@@ -173,8 +198,118 @@ func (q *Queries) GetUserByProviderID(ctx context.Context, arg GetUserByProvider
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
+}
+
+const getUsersByAdmin = `-- name: GetUsersByAdmin :many
+SELECT
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+FROM
+  users
+WHERE
+  is_admin = $1
+ORDER BY
+  created_at DESC
+`
+
+func (q *Queries) GetUsersByAdmin(ctx context.Context, isAdmin *bool) ([]User, error) {
+	rows, err := q.db.Query(ctx, getUsersByAdmin, isAdmin)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.EmailVerified,
+			&i.FirstName,
+			&i.LastName,
+			&i.IsActive,
+			&i.Locale,
+			&i.Provider,
+			&i.ProviderID,
+			&i.ProviderData,
+			&i.LastLoginAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsAdmin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+FROM
+  users
+WHERE
+  ($1::boolean IS NULL OR is_active = $1)
+  AND ($2::boolean IS NULL OR is_admin = $2)
+ORDER BY
+  created_at DESC
+LIMIT
+  $3
+OFFSET
+  $4
+`
+
+type ListUsersParams struct {
+	Column1 bool
+	Column2 bool
+	Limit   int32
+	Offset  int32
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers,
+		arg.Column1,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.EmailVerified,
+			&i.FirstName,
+			&i.LastName,
+			&i.IsActive,
+			&i.Locale,
+			&i.Provider,
+			&i.ProviderID,
+			&i.ProviderData,
+			&i.LastLoginAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsAdmin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateLastLogin = `-- name: UpdateLastLogin :one
@@ -185,7 +320,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type UpdateLastLoginParams struct {
@@ -211,6 +346,7 @@ func (q *Queries) UpdateLastLogin(ctx context.Context, arg UpdateLastLoginParams
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -226,7 +362,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
 `
 
 type UpdateUserParams struct {
@@ -262,6 +398,45 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
+	)
+	return i, err
+}
+
+const updateUserActiveStatus = `-- name: UpdateUserActiveStatus :one
+UPDATE users
+SET
+  is_active = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+`
+
+type UpdateUserActiveStatusParams struct {
+	ID       uuid.UUID
+	IsActive bool
+}
+
+func (q *Queries) UpdateUserActiveStatus(ctx context.Context, arg UpdateUserActiveStatusParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserActiveStatus, arg.ID, arg.IsActive)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }

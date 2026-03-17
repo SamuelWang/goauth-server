@@ -1,0 +1,225 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Lint ─────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check gofmt formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not gofmt-formatted:"
+            gofmt -l .
+            echo "Run 'gofmt -w .' to fix."
+            exit 1
+          fi
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # ─── Unit Tests ───────────────────────────────────────────────────────────
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run unit tests (short, no Docker required)
+        run: |
+          go test -v -race -short \
+            -coverprofile=coverage-unit.out \
+            -covermode=atomic \
+            ./internal/middleware/... \
+            ./internal/service/... \
+            ./internal/transport/... \
+            ./internal/util/... \
+            ./internal/config/...
+
+      - name: Display unit test coverage
+        run: go tool cover -func=coverage-unit.out | tail -1
+
+      - name: Upload unit coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage-unit.out
+          retention-days: 7
+
+  # ─── Integration Tests ────────────────────────────────────────────────────
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run integration tests (requires Docker for testcontainers)
+        run: |
+          go test -v -race \
+            -coverprofile=coverage-integration.out \
+            -covermode=atomic \
+            ./internal/repository/...
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "false"
+          DOCKER_HOST: unix:///var/run/docker.sock
+
+      - name: Display integration test coverage
+        run: go tool cover -func=coverage-integration.out | tail -1
+
+      - name: Upload integration coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage-integration.out
+          retention-days: 7
+
+  # ─── Coverage Gate ────────────────────────────────────────────────────────
+  coverage:
+    name: Coverage Check
+    runs-on: ubuntu-latest
+    needs: [unit-test, integration-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run all tests with combined coverage
+        run: |
+          go test -race \
+            -coverprofile=coverage.out \
+            -covermode=atomic \
+            ./...
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "false"
+          DOCKER_HOST: unix:///var/run/docker.sock
+
+      - name: Filter coverage report (exclude non-testable packages)
+        run: |
+          head -1 coverage.out > coverage-filtered.out
+          grep -vE "goauth-server/(docs-swagger|internal/(testutil|loadtest|models|metrics|app)|cmd)/|goauth-server/internal/transport/http/(api|api/v1|ops|web)/[^/]+\.go" \
+            coverage.out >> coverage-filtered.out
+
+      - name: Check total coverage is at least 80%
+        run: |
+          COVERAGE=$(go tool cover -func=coverage-filtered.out | grep "^total:" | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if awk "BEGIN {exit !($COVERAGE < 80.0)}"; then
+            echo "ERROR: Coverage ${COVERAGE}% is below the required 80% threshold."
+            exit 1
+          fi
+          echo "Coverage check passed: ${COVERAGE}% >= 80%"
+
+      - name: Upload combined coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-combined
+          path: coverage-filtered.out
+          retention-days: 30
+
+  # ─── Build Binary ─────────────────────────────────────────────────────────
+  build:
+    name: Build Binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-w -s" -o bin/auth-service ./cmd/auth-server
+
+      - name: Verify build artifact
+        run: |
+          if [ ! -f bin/auth-service ]; then
+            echo "ERROR: Build artifact not found at bin/auth-service"
+            exit 1
+          fi
+          echo "Build successful: $(du -sh bin/auth-service)"

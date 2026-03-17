@@ -1,231 +1,407 @@
 package middleware
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
-	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/config"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
-
-// Test suite for AuthMiddleware
-//
-// This test suite covers the following scenarios:
-// - Valid token handling (integration test simulating the full flow)
-// - Missing token (no cookie provided)
-// - Invalid token (malformed or expired tokens)
-// - Context value setting (user_id and email)
-// - Request chain abortion on unauthorized requests
-// - Various token validation errors
 
 func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	return gin.New()
 }
 
-// Note: These tests verify the middleware structure and error handling.
-// For complete integration testing with token validation, you would need to:
-// 1. Set up proper ECDSA keys in the config
-// 2. Generate valid tokens using AccessTokenManager
-// 3. Pass them through the middleware
-// The tests below focus on the middleware logic and error paths.
+// testAuthHelper holds a real auth.Service backed by a mock querier, along with
+// the private key used to sign tokens.  Keeping the private key here allows tests
+// to mint arbitrary JWTs (including expired ones) without touching package-private
+// functions.
+type testAuthHelper struct {
+	service *auth.Service
+	privKey *ecdsa.PrivateKey
+}
 
-func TestAuthMiddleware_ValidToken_Integration(t *testing.T) {
-	// Setup router
+// newTestAuthHelper creates an auth.Service initialised with a freshly-generated
+// ECDSA P-256 key pair and the supplied mock querier.
+func newTestAuthHelper(t *testing.T, q *mocks.MockQuerier) *testAuthHelper {
+	t.Helper()
+
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	privDER, err := x509.MarshalECPrivateKey(privKey)
+	require.NoError(t, err)
+	privPEM := string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privDER}))
+
+	pubDER, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+	require.NoError(t, err)
+	pubPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+
+	cfg := &config.Config{
+		App: config.AppConfig{Name: "test-app"},
+		AccessToken: config.AccessTokenConfig{
+			PrivateKey: privPEM,
+			PublicKey:  pubPEM,
+			Expiry:     60,
+		},
+	}
+
+	svc, err := auth.New(q, cfg, nil)
+	require.NoError(t, err)
+
+	return &testAuthHelper{service: svc, privKey: privKey}
+}
+
+// generateValidToken mints a valid JWT via the service's GenerateAccessToken method.
+func (h *testAuthHelper) generateValidToken(t *testing.T) string {
+	t.Helper()
+	token, err := h.service.GenerateAccessToken("user-id-123", "test@example.com")
+	require.NoError(t, err)
+	return token
+}
+
+// generateExpiredToken creates a JWT whose expiry is set in the past but signed
+// with the same private key as the service, so only the time check fails.
+func (h *testAuthHelper) generateExpiredToken(t *testing.T) string {
+	t.Helper()
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"user_id": "user-id-123",
+		"email":   "test@example.com",
+		"exp":     now.Add(-1 * time.Minute).Unix(),
+		"iat":     now.Add(-2 * time.Minute).Unix(),
+		"nbf":     now.Add(-2 * time.Minute).Unix(),
+		"iss":     "test-app",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	signed, err := token.SignedString(h.privKey)
+	require.NoError(t, err)
+	return signed
+}
+
+// hashForTest produces the hex SHA-256 hash that the service stores in the DB.
+func hashForTest(raw string) string {
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
+}
+
+// activeTokenRecord returns a non-revoked AccessToken row for the given raw token.
+func activeTokenRecord(rawToken string) repository.AccessToken {
+	notRevoked := false
+	return repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: hashForTest(rawToken),
+		ClientID:  uuid.New(),
+		UserID:    uuid.New(),
+		ExpiresAt: time.Now().Add(time.Hour),
+		IsRevoked: &notRevoked,
+	}
+}
+
+// revokedTokenRecord returns an IsRevoked=true AccessToken row for the given raw token.
+func revokedTokenRecord(rawToken string) repository.AccessToken {
+	revoked := true
+	return repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: hashForTest(rawToken),
+		ClientID:  uuid.New(),
+		UserID:    uuid.New(),
+		ExpiresAt: time.Now().Add(time.Hour),
+		IsRevoked: &revoked,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AuthMiddleware tests
+// ---------------------------------------------------------------------------
+
+func TestAuthMiddleware_MissingToken_NoCookieOrHeader(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
 	router := setupTestRouter()
 
-	// Create a test handler that will be called if auth succeeds
-	var capturedUserID, capturedEmail string
-	router.GET("/protected", func(c *gin.Context) {
-		// This simulates the middleware
-		token, err := c.Cookie("access_token")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - no token"})
-			c.Abort()
-			return
-		}
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
-		// For this test, we accept a specific token
-		if token == "valid-token-123" {
-			c.Set("user_id", "user-456")
-			c.Set("email", "valid@example.com")
-		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - invalid token"})
-			c.Abort()
-			return
-		}
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
-		// Continue to the handler
-		userId, _ := c.Get("user_id")
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "no token")
+	assert.False(t, handlerCalled)
+	mockQ.AssertNotCalled(t, "GetAccessToken")
+}
+
+func TestAuthMiddleware_MalformedAuthHeader(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearertoken-without-space")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "malformed")
+	assert.False(t, handlerCalled)
+	mockQ.AssertNotCalled(t, "GetAccessToken")
+}
+
+func TestAuthMiddleware_InvalidJWT(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: "not.a.valid.jwt"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid token")
+	assert.False(t, handlerCalled)
+	mockQ.AssertNotCalled(t, "GetAccessToken")
+}
+
+func TestAuthMiddleware_ExpiredToken(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	expiredToken := h.generateExpiredToken(t)
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: expiredToken})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid token")
+	assert.False(t, handlerCalled)
+	// Expiry check happens in JWT validation; DB is never consulted.
+	mockQ.AssertNotCalled(t, "GetAccessToken")
+}
+
+func TestAuthMiddleware_TokenNotFoundInDB(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	validToken := h.generateValidToken(t)
+	// Token not present in DB → treated as invalid/revoked.
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+		Return(repository.AccessToken{}, pgx.ErrNoRows)
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: validToken})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "revoked")
+	assert.False(t, handlerCalled)
+	mockQ.AssertExpectations(t)
+}
+
+func TestAuthMiddleware_RevokedToken(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	validToken := h.generateValidToken(t)
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+		Return(revokedTokenRecord(validToken), nil)
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: validToken})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "revoked")
+	assert.False(t, handlerCalled)
+	mockQ.AssertExpectations(t)
+}
+
+func TestAuthMiddleware_RevocationDBError(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	validToken := h.generateValidToken(t)
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+		Return(repository.AccessToken{}, assert.AnError)
+
+	var handlerCalled bool
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		handlerCalled = true
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: validToken})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.False(t, handlerCalled)
+	mockQ.AssertExpectations(t)
+}
+
+func TestAuthMiddleware_ValidToken_Cookie(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
+	router := setupTestRouter()
+
+	validToken := h.generateValidToken(t)
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+		Return(activeTokenRecord(validToken), nil)
+
+	var capturedUserID, capturedEmail, capturedRawToken string
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		capturedUserID = uid.(string)
 		email, _ := c.Get("email")
-		capturedUserID = userId.(string)
 		capturedEmail = email.(string)
-		c.JSON(http.StatusOK, gin.H{"status": "authenticated"})
+		raw, _ := c.Get("raw_token")
+		capturedRawToken = raw.(string)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Create request with valid token
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-	req.AddCookie(&http.Cookie{
-		Name:  "access_token",
-		Value: "valid-token-123",
-	})
-
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: validToken})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Assertions
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "user-456", capturedUserID)
-	assert.Equal(t, "valid@example.com", capturedEmail)
+	assert.Equal(t, "user-id-123", capturedUserID)
+	assert.Equal(t, "test@example.com", capturedEmail)
+	assert.Equal(t, validToken, capturedRawToken)
+	mockQ.AssertExpectations(t)
 }
 
-func TestAuthMiddleware_MissingToken(t *testing.T) {
-	// Setup router
+func TestAuthMiddleware_ValidToken_BearerHeader(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
 	router := setupTestRouter()
 
-	// Create a minimal auth service (we won't use it since there's no token)
-	authSvc := &authservice.AuthService{}
+	validToken := h.generateValidToken(t)
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+		Return(activeTokenRecord(validToken), nil)
 
-	var handlerCalled bool
-	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
-		handlerCalled = true
+	var capturedUserID string
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
+		uid, _ := c.Get("user_id")
+		capturedUserID = uid.(string)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Create request without cookie
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+validToken)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Assertions
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Contains(t, w.Body.String(), "Unauthorized - no token")
-	assert.False(t, handlerCalled, "Handler should not be called when token is missing")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "user-id-123", capturedUserID)
+	mockQ.AssertExpectations(t)
 }
 
-func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	// Setup router
+func TestAuthMiddleware_HeaderTakesPrecedenceOverCookie(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
 	router := setupTestRouter()
 
-	var handlerCalled bool
-	authSvc := &authservice.AuthService{}
+	// Only the header token is active; the cookie token is not set up on the mock,
+	// which means the middleware must prefer the header.
+	headerToken := h.generateValidToken(t)
+	mockQ.On("GetAccessToken", mock.Anything, hashForTest(headerToken)).
+		Return(activeTokenRecord(headerToken), nil)
 
-	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
-		handlerCalled = true
+	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Create request with invalid token
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-	req.AddCookie(&http.Cookie{
-		Name:  "access_token",
-		Value: "invalid-token",
-	})
-
+	req.Header.Set("Authorization", "Bearer "+headerToken)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: "some-other-token"})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Without proper keys configured, any token will fail validation
-	// This verifies the middleware returns 401 for invalid tokens
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Contains(t, w.Body.String(), "Unauthorized - invalid token")
-	assert.False(t, handlerCalled, "Handler should not be called when token is invalid")
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockQ.AssertExpectations(t)
 }
 
-// TestAuthMiddleware_ContextSettings tests that user info is properly set in context
-func TestAuthMiddleware_ContextSettings(t *testing.T) {
-	// Create a test context
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Simulate what the middleware does
-	c.Set("user_id", "test-user-id")
-	c.Set("email", "test@example.com")
-
-	// Verify context values
-	userID, exists := c.Get("user_id")
-	assert.True(t, exists)
-	assert.Equal(t, "test-user-id", userID)
-
-	email, exists := c.Get("email")
-	assert.True(t, exists)
-	assert.Equal(t, "test@example.com", email)
-}
-
-// TestAuthMiddleware_AbortOnUnauthorized tests that the middleware aborts the request chain
-func TestAuthMiddleware_AbortOnUnauthorized(t *testing.T) {
+func TestAuthMiddleware_HandlerAbortedOnUnauthorized(t *testing.T) {
+	mockQ := &mocks.MockQuerier{}
+	h := newTestAuthHelper(t, mockQ)
 	router := setupTestRouter()
 
 	var nextHandlerCalled bool
-	authSvc := &authservice.AuthService{}
+	router.GET("/protected",
+		AuthMiddleware(h.service),
+		func(c *gin.Context) {
+			nextHandlerCalled = true
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		},
+	)
 
-	router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
-		nextHandlerCalled = true
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
-
-	// Request without token
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Verify the next handler was not called
-	assert.False(t, nextHandlerCalled, "Next handler should not be called when unauthorized")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-// TestAuthMiddleware_TokenValidationError tests various token validation errors
-func TestAuthMiddleware_TokenValidationError(t *testing.T) {
-	tests := []struct {
-		name          string
-		tokenValue    string
-		expectedError string
-	}{
-		{
-			name:          "expired token",
-			tokenValue:    "expired-token",
-			expectedError: "Unauthorized - invalid token",
-		},
-		{
-			name:          "malformed token",
-			tokenValue:    "malformed-token",
-			expectedError: "Unauthorized - invalid token",
-		},
-		{
-			name:          "signature invalid",
-			tokenValue:    "invalid-signature",
-			expectedError: "Unauthorized - invalid token",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router := setupTestRouter()
-
-			// For these tests, we verify the error response structure
-			// In a real scenario with dependency injection, we would mock the service
-			var handlerCalled bool
-
-			authSvc := &authservice.AuthService{}
-			router.GET("/protected", AuthMiddleware(authSvc), func(c *gin.Context) {
-				handlerCalled = true
-				c.JSON(http.StatusOK, gin.H{"status": "ok"})
-			})
-
-			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-			req.AddCookie(&http.Cookie{
-				Name:  "access_token",
-				Value: tt.tokenValue,
-			})
-
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, req)
-
-			// Assertions - without proper keys, any token will be invalid
-			assert.Equal(t, http.StatusUnauthorized, w.Code)
-			assert.False(t, handlerCalled)
-		})
-	}
+	assert.False(t, nextHandlerCalled, "next handler should not be called when unauthorized")
 }

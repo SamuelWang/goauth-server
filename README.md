@@ -1,211 +1,494 @@
 # goauth-server
 
-A Golang service of the auth platform.
+[![CI](https://github.com/SamuelWang/goauth-server/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuelWang/goauth-server/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://golang.org/dl/)
+[![License](https://img.shields.io/github/license/SamuelWang/goauth-server)](LICENSE)
 
-## Setup Instructions
+**goauth-server** is a production-ready OAuth 2.0 Authorization Code Grant server written in Go. It implements a **client-scoped OAuth provider architecture** that lets each registered client application configure its own set of OAuth providers (Google, GitHub, Microsoft, etc.) independently — enabling multi-tenant deployments where different applications maintain separate, isolated OAuth integrations.
 
-1. **Clone the Repository**
+## Table of Contents
 
-    ```bash
-    git clone https://github.com/SamuelWang/goauth-server.git
-    cd goauth-server
-    ```
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start (Docker)](#quick-start-docker)
+- [Manual Setup](#manual-setup)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+- [Development](#development)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Monitoring](#monitoring)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
-2. **Install Dependencies**
+## Features
 
-    Ensure you have Go installed. Then, run:
+- **OAuth 2.0 Authorization Code Grant** — Full end-to-end flow: provider login, callback handling, code-for-token exchange, and token revocation.
+- **Client-scoped OAuth providers** — Each client application can configure its own set of OAuth providers. Provider credentials are isolated per client and encrypted at rest with AES-256-GCM.
+- **Multi-provider support** — Configure multiple providers per client (e.g., Google + GitHub + Microsoft Entra ID). The same provider type can be configured differently across clients.
+- **JWT access tokens** — ECDSA ES256-signed JWTs with configurable expiry. Tokens are validated and revocation-checked on every request.
+- **Admin management API** — Full CRUD for clients, client-scoped providers, users, and sessions (authorization codes + access tokens).
+- **Security hardening** — Rate limiting (per IP and per user), CORS, CSRF double-submit cookie protection, security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy), and structured security event logging.
+- **Prometheus metrics + Grafana dashboards** — Request rates, error rates, latency percentiles, token issuance, and security event counters.
+- **Docker & Kubernetes ready** — Multi-stage Dockerfile, Docker Compose stack with auto-migration, and full Kubernetes manifests.
+- **CI pipeline** — GitHub Actions with lint, unit tests, integration tests, coverage gate (≥ 80%), and binary build.
+- **OpenAPI / Swagger UI** — Auto-generated documentation available at `/api/docs/index.html`.
 
-    ```bash
-    go mod download
-    ```
+## Architecture
 
-3. **Set Up the Database**
+### Client-Scoped OAuth Provider Model
 
-    Make sure you have PostgreSQL installed and running. Create a new database for the application.
+```
+Client A ──┬── Google provider  (Client A's Google credentials)
+           └── GitHub provider  (Client A's GitHub credentials)
 
-4. **Configure Environment Variables**
-
-    Create a `.env` file in the root directory by copying the `.env.example` and set the necessary environment variables (e.g., database connection string, server port).
-
-    4.1. **Generate Access Token Keys**
-
-    ```bash
-    chmod +x scripts/credentials/generate_access_token_keys.sh
-    ./scripts/credentials/generate_access_token_keys.sh
-    ```
-    4.2. **Copy the private key and the public key into the `.env` file**
-
-5. **Run Database Migrations**
-
-    Use `golang-migrate` to run the migrations:
-
-    ```bash
-    chmod +x scripts/db/run_migrations.sh
-    ./scripts/db/run_migrations.sh
-    ```
-
-6. **Run the Application**
-
-    Start the auth service:
-
-    ```bash
-    go run ./cmd/auth-server
-    ```
-
-## Database Migrations
-
-Database migration scripts are located in the `internal/db/migrations` directory. If you need to add new migrations, ensure you have `golang-migrate` installed.
-
-### New Migrations
-
-Follow the instructions below to create and apply new migrations:
-
-1. Create a new migration:
-
-    ```bash
-    migrate create -ext sql -dir ./internal/db/migrations <migration_name>
-    ```
-
-2. Apply migrations to the database:
-
-    ```bash
-    chmod +x scripts/db/run_migrations.sh
-    ./scripts/db/run_migrations.sh [N]
-    ```
-
-3. Dump the database schema:
-
-    ```bash
-    chmod +x scripts/db/dump_schema.sh
-    ./scripts/db/dump_schema.sh
-    ```
-
-4. Write SQL queries in the appropriate files under `internal/db/queries/`.
-
-5. Generate SQL code with sqlc:
-
-    ```bash
-    sqlc generate
-    ```
-
-### Rollback Migrations
-
-If you need to rollback migrations the repository provides a helper script. Usage:
-
-```bash
-chmod +x scripts/db/rollback_migrations.sh
-# rollback all migrations (default)
-./scripts/db/rollback_migrations.sh
-# rollback N down migrations (e.g. 2)
-./scripts/db/rollback_migrations.sh 2
+Client B ──┬── Google provider  (Client B's own Google credentials)
+           └── Microsoft provider
 ```
 
-## Development
+- Providers belong to a specific client — `Client A`'s Google config is completely independent of `Client B`'s.
+- A client's providers are invisible to other clients (`ErrProviderClientMismatch` is surfaced as 404 to prevent cross-client information leakage).
+- Provider client secrets are encrypted with AES-256-GCM before storage and never returned in API responses.
 
-### Technologies Used
+### Request Flow
 
-- Golang
-- Gin Web Framework
-- PostgreSQL
-- sqlc + pgx
-- golang-migrate
+```
+Browser / App
+    │
+    ├─ GET /web/auth/:client_id/:provider/login   ← Initiate OAuth, redirect to provider
+    │
+    ├─ GET /web/auth/:client_id/:provider/callback ← Provider returns code; issue auth code; redirect to app
+    │
+    └─ POST /api/v1/auth/token                    ← App exchanges auth code for JWT access token
+```
 
-### Recommended IDE Setup
+### Router Groups
 
-For development, it's recommended to use Visual Studio Code with the following extensions:
+| Prefix | Description |
+|--------|-------------|
+| `/web/auth/...` | Browser-facing OAuth login and callback endpoints |
+| `/api/v1/...` | JSON API: token exchange, admin management |
+| `/ops/...` | Health check and Prometheus metrics |
 
-- [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
-- [Prettier SQL VSCode](https://marketplace.visualstudio.com/items?itemName=inferrinizzard.prettier-sql-vscode)
+## Quick Start (Docker)
 
-### File Structure
+The fastest way to run the full stack (PostgreSQL + auto-migration + API server + Prometheus + Grafana):
 
-- `cmd/auth-server`: Main application entry point.
-- `internal/app/`: Application bootstrapping and initialization.
-- `internal/config/`: Configuration settings for the application.
-- `internal/db/`: Database configuration and connection logic.
-  - `migrations/`: Database migration files.
-  - `queries/`: SQL query files for sqlc.
-  - `schema/`: Database schema dumps.
-- `internal/middleware/`: HTTP middleware components.
-- `internal/models/`: Data models for the application.
-- `internal/repository/`: Data access layer containing code generated by sqlc.
-- `internal/service/`: Business logic layer.
-- `internal/transport/`: Request and response handling.
-  - `http/`: HTTP-related code.
-- `scripts/`: Scripts for database management and credential generation.
+**1. Clone and configure**
 
-## Testing
+```bash
+git clone https://github.com/SamuelWang/goauth-server.git
+cd goauth-server
+cp .env.example .env
+```
 
-The project uses Go's standard testing framework with additional tools:
+**2. Generate required secret keys**
 
-- **testify**: For assertions and test utilities
-- **testcontainers-go**: For integration tests with PostgreSQL
+```bash
+# ES256 key pair for JWT signing
+chmod +x scripts/credentials/generate_access_token_keys.sh
+./scripts/credentials/generate_access_token_keys.sh
+# Copy the printed keys into .env (ACCESS_TOKEN_PRIVATE_KEY / ACCESS_TOKEN_PUBLIC_KEY)
+
+# AES-256 encryption key for provider secrets at rest
+openssl rand -hex 32   # → paste as PROVIDER_ENCRYPTION_KEY in .env
+
+# HMAC key for OAuth session cookies
+openssl rand -hex 32   # → paste as SESSION_SIGNING_KEY in .env
+
+# Database password
+# → set as DB_PASSWORD in .env
+```
+
+**3. Start the stack**
+
+```bash
+docker compose up --build
+```
+
+The `migrate` service automatically applies all pending database migrations before the API server starts.
+
+**Service endpoints once running:**
+
+| Endpoint | Description |
+|----------|-------------|
+| `http://localhost:8080/ops/health` | Health check |
+| `http://localhost:8080/api/docs/index.html` | Swagger UI |
+| `http://localhost:8080/metrics` | Prometheus metrics |
+| `http://localhost:9090` | Prometheus UI |
+| `http://localhost:3000` | Grafana dashboards (admin / see `.env`) |
+
+## Manual Setup
 
 ### Prerequisites
 
-Before running tests, ensure Docker is installed and running on your system. Testcontainers requires Docker to spin up PostgreSQL instances for integration tests.
+- Go 1.25+
+- PostgreSQL 16+
+- [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI
+- [`sqlc`](https://sqlc.dev/) (only needed when modifying SQL queries)
 
-**Linux Users:** Add your user to the docker group to run Docker without sudo:
+### Steps
+
+**1. Clone and install dependencies**
+
+```bash
+git clone https://github.com/SamuelWang/goauth-server.git
+cd goauth-server
+go mod download
+```
+
+**2. Create a PostgreSQL database**
+
+```bash
+createdb goauth
+```
+
+**3. Configure environment variables**
+
+```bash
+cp .env.example .env
+# Edit .env — see the Configuration section below
+```
+
+**4. Generate JWT keys**
+
+```bash
+chmod +x scripts/credentials/generate_access_token_keys.sh
+./scripts/credentials/generate_access_token_keys.sh
+# Copy the PRIVATE and PUBLIC key blocks into .env
+```
+
+**5. Run database migrations**
+
+```bash
+chmod +x db/scripts/run_migrations.sh
+./db/scripts/run_migrations.sh
+```
+
+**6. Start the server**
+
+```bash
+go run ./cmd/auth-server
+```
+
+The server starts on `http://localhost:8080` by default.
+
+## Configuration
+
+All configuration is read from environment variables (or a `.env` file in the project root). Copy `.env.example` to `.env` and fill in the required values.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ENV` | No | `development` | Runtime environment: `development`, `production`, or `test` |
+| `SCHEME` | No | `http` | `http` or `https` — used to construct OAuth callback URLs |
+| `HOST` | No | `localhost` | Server hostname |
+| `PORT` | No | `8080` | HTTP listen port |
+| `DB_HOST` | Yes | — | PostgreSQL host |
+| `DB_PORT` | No | `5432` | PostgreSQL port |
+| `DB_USER` | Yes | — | PostgreSQL user |
+| `DB_PASSWORD` | Yes | — | PostgreSQL password |
+| `DB_NAME` | Yes | — | PostgreSQL database name |
+| `DB_SSLMODE` | No | `disable` | `disable`, `require`, `verify-ca`, or `verify-full` |
+| `ACCESS_TOKEN_PRIVATE_KEY` | Yes | — | PEM-encoded ES256 (ECDSA P-256) private key |
+| `ACCESS_TOKEN_PUBLIC_KEY` | Yes | — | PEM-encoded ES256 public key |
+| `ACCESS_TOKEN_EXPIRY_MINUTES` | No | `60` | JWT access token lifetime in minutes |
+| `PROVIDER_ENCRYPTION_KEY` | Yes | — | 64 hex chars (32 bytes) — AES-256-GCM key for provider secrets |
+| `SESSION_SIGNING_KEY` | Yes | — | 64 hex chars (32 bytes) — HMAC-SHA256 key for OAuth session cookies |
+| `CORS_ALLOWED_ORIGINS` | No | `""` | Comma-separated allowed CORS origins (empty = wildcard in dev, block all in prod) |
+| `GRAFANA_ADMIN_USER` | No | `admin` | Grafana admin username (Docker Compose only) |
+| `GRAFANA_ADMIN_PASSWORD` | No | — | Grafana admin password (Docker Compose only) |
+
+> **Production note:** Set `ENV=production` to enable HTTPS enforcement on OAuth provider URLs, HSTS headers, and strict CORS origin checking.
+
+## API Reference
+
+Interactive documentation is available at `/api/docs/index.html` when the server is running.
+
+### Public endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/ops/health` | Health check |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/api/v1/clients/:client_id/auth/providers` | List enabled OAuth providers for a client |
+| `GET` | `/web/auth/:client_id/:provider/login` | Initiate OAuth login flow |
+| `GET` | `/web/auth/:client_id/:provider/callback` | OAuth provider callback |
+| `POST` | `/api/v1/auth/token` | Exchange authorization code for access token |
+
+### Authenticated endpoints (Bearer token required)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/auth/me` | Get current user info |
+| `POST` | `/api/v1/auth/logout` | Revoke access token and clear session |
+
+### Admin endpoints (Bearer token + `is_admin = true` required)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/clients` | List clients |
+| `POST` | `/api/v1/clients` | Create client |
+| `GET` | `/api/v1/clients/:client_id` | Get client |
+| `PATCH` | `/api/v1/clients/:client_id` | Update client |
+| `DELETE` | `/api/v1/clients/:client_id` | Soft-delete client |
+| `POST` | `/api/v1/clients/:client_id/regenerate-secret` | Regenerate client secret |
+| `GET` | `/api/v1/clients/:client_id/providers` | List providers for client |
+| `POST` | `/api/v1/clients/:client_id/providers` | Create provider for client |
+| `GET` | `/api/v1/clients/:client_id/providers/:id` | Get provider |
+| `PATCH` | `/api/v1/clients/:client_id/providers/:id` | Update provider |
+| `DELETE` | `/api/v1/clients/:client_id/providers/:id` | Delete provider |
+| `GET` | `/api/v1/users` | List users |
+| `PATCH` | `/api/v1/users/:id` | Update user status |
+| `GET` | `/api/v1/sessions/codes` | List authorization codes |
+| `DELETE` | `/api/v1/sessions/codes/:id` | Revoke authorization code |
+| `GET` | `/api/v1/sessions/tokens` | List access tokens |
+| `DELETE` | `/api/v1/sessions/tokens/:id` | Revoke access token |
+
+All state-changing admin requests require both an `Authorization: Bearer <token>` header and an `X-CSRF-Token` header (double-submit cookie pattern).
+
+### Rate limits
+
+| Endpoint | Limit |
+|----------|-------|
+| `POST /api/v1/auth/token` | 10 req/min per IP |
+| `GET /web/auth/.../login` | 20 req/min per IP |
+| Admin endpoints | 30 req/min per user |
+
+## Development
+
+### Technologies
+
+| Component | Library / Tool |
+|-----------|---------------|
+| Web framework | [Gin](https://github.com/gin-gonic/gin) |
+| Database | PostgreSQL 16+ via [pgx/v5](https://github.com/jackc/pgx) |
+| Query codegen | [sqlc](https://sqlc.dev/) |
+| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) |
+| JWT | [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) (ES256) |
+| Metrics | [Prometheus client_golang](https://github.com/prometheus/client_golang) |
+| API docs | [swaggo/swag](https://github.com/swaggo/swag) |
+| Linter | [golangci-lint](https://golangci-lint.run/) |
+
+### Recommended IDE
+
+Visual Studio Code with:
+- [Go](https://marketplace.visualstudio.com/items?itemName=golang.Go)
+- [Prettier SQL VSCode](https://marketplace.visualstudio.com/items?itemName=inferrinizzard.prettier-sql-vscode)
+
+### Project Structure
+
+```
+goauth-server/
+├── cmd/auth-server/          # Main application entry point and Swagger annotations
+├── db/
+│   ├── migrations/           # golang-migrate SQL migration files
+│   ├── queries/              # sqlc SQL query definitions
+│   └── schema/               # Dumped database schema
+├── docs/                     # Project documentation (guides, design docs)
+├── docs-planning/            # Documentation planning files
+├── docs-swagger/             # Auto-generated OpenAPI spec (swag init output)
+├── internal/
+│   ├── app/auth-server/      # Server bootstrapping (dependency wiring, Gin setup)
+│   ├── config/               # Environment variable parsing
+│   ├── metrics/              # Prometheus registry and metric definitions
+│   ├── middleware/           # Gin middleware (auth, admin, CORS, CSRF, rate limit, security headers)
+│   ├── models/               # Shared domain models
+│   ├── repository/           # sqlc-generated data access layer
+│   ├── service/              # Business logic
+│   │   ├── auth/             # OAuth flow, token issuance, and revocation
+│   │   ├── client/           # Client application management
+│   │   ├── provider/         # OAuth provider management (with secret encryption)
+│   │   ├── session/          # Authorization code and access token management
+│   │   └── user/             # User management
+│   ├── testutil/             # Shared test utilities
+│   ├── transport/http/
+│   │   ├── api/              # JSON API routes and handlers
+│   │   ├── ops/              # Health and metrics endpoints
+│   │   └── web/              # Browser OAuth flow handlers
+│   └── util/                 # Security logging and other utilities
+├── k8s/                      # Kubernetes manifests
+├── monitoring/               # Prometheus and Grafana configuration
+├── scripts/
+│   ├── credentials/          # Key generation scripts
+│   └── deploy/               # Docker and Kubernetes deployment scripts
+└── docker-compose.yml
+```
+
+### Database Migrations
+
+```bash
+# Create a new migration
+migrate create -ext sql -dir ./db/migrations <migration_name>
+
+# Apply all pending migrations
+chmod +x db/scripts/run_migrations.sh
+./db/scripts/run_migrations.sh
+
+# Apply N migrations
+./db/scripts/run_migrations.sh 2
+
+# Roll back N migrations (default: all)
+chmod +x db/scripts/rollback_migrations.sh
+./db/scripts/rollback_migrations.sh [N]
+
+# Dump schema after migrations
+chmod +x db/scripts/dump_schema.sh
+./db/scripts/dump_schema.sh
+```
+
+### Regenerating sqlc Code
+
+After modifying files under `db/queries/`:
+
+```bash
+sqlc generate
+```
+
+### Regenerating Swagger Docs
+
+After modifying handler annotation comments:
+
+```bash
+swag init -g cmd/auth-server/docs.go -o docs-swagger/ --parseDependency --parseInternal
+```
+
+## Testing
+
+The project uses Go's standard testing framework with [testify](https://github.com/stretchr/testify) for assertions and [testcontainers-go](https://golang.testcontainers.org/) for PostgreSQL integration tests.
+
+### Prerequisites
+
+Docker must be running on your machine (required by testcontainers for repository integration tests).
+
+**Linux:** ensure your user is in the `docker` group:
 
 ```bash
 sudo usermod -aG docker $USER
+newgrp docker   # apply without logging out
+docker ps       # verify access
 ```
-
-Then log out and log back in for the changes to take effect, or run:
-
-```bash
-newgrp docker
-```
-
-**Verify Docker access:**
-
-```bash
-docker ps
-```
-
-If this command runs without errors, you're ready to run tests.
 
 ### Running Tests
 
-**Run all tests:**
-
 ```bash
+# All tests
 go test ./...
-```
 
-**Run tests with verbose output:**
+# Skip integration tests (no Docker required)
+go test -short ./...
 
-```bash
+# With verbose output
 go test -v ./...
-```
 
-**Run tests with coverage:**
-
-```bash
+# With coverage summary
 go test -cover ./...
-```
 
-**Run tests with coverage report:**
-
-```bash
+# Generate HTML coverage report
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
+
+# Single package
+go test ./internal/service/auth/...
+
+# Single test function
+go test -run TestExchangeCode ./internal/service/auth/...
 ```
 
-**Run tests in a specific package:**
+### Test Layers
+
+| Layer | Location | Requires Docker |
+|-------|----------|----------------|
+| Middleware | `internal/middleware/*_test.go` | No |
+| Service (unit) | `internal/service/**/*_test.go` | No |
+| Handler (integration) | `internal/transport/http/api/v1/handler/*_test.go` | No |
+| Repository (integration) | `internal/repository/*_test.go` | **Yes** |
+| Penetration tests | `internal/transport/http/api/v1/handler/security_test.go` | No |
+
+> Coverage gate: ≥ 80% required across the codebase (enforced by CI).
+
+## Deployment
+
+### Docker Compose (recommended for local / staging)
 
 ```bash
-go test ./internal/repository
+cp .env.example .env
+# Fill in required secrets (see Configuration section)
+docker compose up --build
 ```
 
-**Run a specific test:**
+The stack starts PostgreSQL, runs all pending migrations automatically, then starts the API server.
+
+For a scripted deployment with pre-flight validation and health-check polling:
 
 ```bash
-go test -run TestFunctionName ./internal/package
+chmod +x scripts/deploy/deploy-docker.sh
+./scripts/deploy/deploy-docker.sh
 ```
 
-### Writing Tests
+### Kubernetes
 
-- Test files should be named with the `_test.go` suffix
-- Integration tests use testcontainers to spin up PostgreSQL instances
-- Use testify for assertions: `assert` and `require` packages
+```bash
+chmod +x scripts/deploy/deploy-k8s.sh
+./scripts/deploy/deploy-k8s.sh [--image-tag <tag>] [--dry-run]
+```
+
+Manifests are located in `k8s/`. Key resources:
+
+| File | Description |
+|------|-------------|
+| `k8s/namespace.yaml` | `goauth` namespace |
+| `k8s/configmap.yaml` | Non-sensitive runtime config |
+| `k8s/secret.yaml` | Secret template (populate out-of-band) |
+| `k8s/deployment.yaml` | 2-replica Deployment with liveness/readiness probes |
+| `k8s/service.yaml` | ClusterIP Service (port 80 → 8080) |
+| `k8s/ingress.yaml` | nginx Ingress with TLS / cert-manager annotations |
+| `k8s/migrate-job.yaml` | One-off migration Job |
+
+### Database Backup and Restore
+
+```bash
+# Backup (creates a .dump.gz archive)
+chmod +x scripts/deploy/backup-database.sh
+./scripts/deploy/backup-database.sh [--docker] [--retain <days>]
+
+# Restore
+chmod +x scripts/deploy/restore-database.sh
+./scripts/deploy/restore-database.sh <backup-file.dump.gz> [--drop-existing]
+```
+
+## Monitoring
+
+The Docker Compose stack starts Prometheus (port 9090) and Grafana (port 3000) alongside the API server.
+
+Prometheus scrapes `/metrics` every 15 s. The Grafana dashboard (auto-provisioned on startup) provides:
+
+- **Overview:** request rate, error rate, p95 latency, active goroutines
+- **HTTP Traffic:** per-route request rates, error rates, latency percentiles
+- **Token Issuance:** tokens issued vs revoked
+- **Security Events:** auth failures, rate-limit violations, CSRF violations, admin access denials
+
+Alert rules (in `monitoring/prometheus/alerts.yml`) fire on: server down, high 5xx rate (> 5%), high 4xx rate (> 20%), high latency (p95 > 1 s), high rate-limit violations, high auth failure rate, and high memory usage.
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Administrator Guide](docs/AdministratorGuide.md) | Setup, key generation, client and provider management, troubleshooting |
+| [Client Integration Guide](docs/ClientIntegrationGuide.md) | OAuth flow walkthrough with TypeScript, Python, and Go examples |
+| [Database Documentation](docs/DatabaseDocumentation.md) | Schema, indexes, foreign keys, and migration order |
+| [Service Layer Documentation](docs/ServiceLayerDocumentation.md) | Business logic layer architecture and service contracts |
+| [Repository Documentation](docs/RepositoryDocumentation.md) | Data access layer and sqlc query reference |
+| [API Docs (Swagger UI)](http://localhost:8080/api/docs/index.html) | Interactive OpenAPI documentation (requires running server) |
+| [System Design v0.2.0](docs/v0.2.0/SystemDesign.md) | Architecture decisions and component design |
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Write tests for new functionality — the CI coverage gate requires ≥ 80%.
+3. Run `golangci-lint run` locally before pushing (configuration is in `.golangci.yml`).
+4. Open a pull request against `develop`. The CI pipeline must pass before merge.
+
+## License
+
+This project is licensed under the terms of the [LICENSE](LICENSE) file.

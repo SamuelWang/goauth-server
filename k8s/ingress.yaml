@@ -1,0 +1,42 @@
+# Goauth Server – Kubernetes Ingress
+#
+# Prerequisites:
+#   - An Ingress controller must be installed (e.g., ingress-nginx, Traefik)
+#   - cert-manager must be installed for TLS certificate management
+#   - Update `host` and `secretName` to match your domain/cert setup
+#
+# To install cert-manager:
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+#
+# To create a ClusterIssuer for Let's Encrypt, see:
+#   https://cert-manager.io/docs/configuration/acme/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: goauth-ingress
+  namespace: goauth
+  labels:
+    app.kubernetes.io/name: goauth-server
+    app.kubernetes.io/component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Uncomment to enable cert-manager automatic TLS:
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  # tls:
+  #   - hosts:
+  #       - auth.example.com
+  #     secretName: goauth-tls
+  rules:
+    - host: auth.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: goauth-service
+                port:
+                  name: http

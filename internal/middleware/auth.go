@@ -3,32 +3,74 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 
-	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/metrics"
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware validates access token and sets user context
-func AuthMiddleware(authService *authservice.AuthService) gin.HandlerFunc {
+// AuthMiddleware validates an access token and populates user context.
+// It accepts the token from either an "Authorization: Bearer <token>" header
+// or an "access_token" cookie. The raw token string is stored under the
+// "raw_token" context key so that handlers (e.g. logout) can revoke it.
+func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get token from cookie
-		token, err := c.Cookie("access_token")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - no token"})
-			c.Abort()
-			return
+		var token string
+
+		// Prefer the Authorization header; fall back to the cookie.
+		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+			if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "bearer ") {
+				token = authHeader[7:]
+			} else {
+				util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "malformed authorization header")
+				metrics.AuthFailuresTotal.WithLabelValues("malformed_header").Inc()
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - malformed authorization header"})
+				c.Abort()
+				return
+			}
+		} else {
+			var err error
+			token, err = c.Cookie("access_token")
+			if err != nil {
+				util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "missing token")
+				metrics.AuthFailuresTotal.WithLabelValues("missing_token").Inc()
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - no token"})
+				c.Abort()
+				return
+			}
 		}
 
-		// Validate token
+		// Validate the token signature and expiry.
 		claims, err := authService.ValidateAccessToken(token)
 		if err != nil {
 			log.Printf("Invalid token: %v", err)
+			util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), "", "invalid token")
+			metrics.AuthFailuresTotal.WithLabelValues("invalid_token").Inc()
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - invalid token"})
 			c.Abort()
 			return
 		}
 
-		// Set user info in context
+		// Check whether the token has been revoked in the database.
+		isRevoked, err := authService.IsTokenRevoked(c.Request.Context(), token)
+		if err != nil {
+			log.Printf("AuthMiddleware: revocation check failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			c.Abort()
+			return
+		}
+		if isRevoked {
+			util.LogAuthFailure(c.ClientIP(), c.GetString("request_id"), claims.UserID, "token revoked")
+			metrics.AuthFailuresTotal.WithLabelValues("revoked_token").Inc()
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - token has been revoked"})
+			c.Abort()
+			return
+		}
+
+		// Store the raw token so handlers can revoke it (e.g. logout).
+		c.Set("raw_token", token)
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 

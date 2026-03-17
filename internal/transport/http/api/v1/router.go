@@ -2,23 +2,76 @@ package v1
 
 import (
 	"github.com/SamuelWang/goauth-server/internal/middleware"
-	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/auth"
+	"github.com/SamuelWang/goauth-server/internal/service/client"
+	"github.com/SamuelWang/goauth-server/internal/service/provider"
+	"github.com/SamuelWang/goauth-server/internal/service/session"
+	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/transport/http/api/v1/handler"
 
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, authService *authservice.AuthService) {
-	authHandler := handler.New(authService)
+func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service) {
+	h := handler.New(authService, userService, providerService, clientService, sessionService)
 
-	// Auth routes
-	authGroup := r.Group("/auth")
+	// Public auth routes
+	publicAuth := r.Group("/auth")
 	{
-		// Public routes
-		authGroup.POST("/logout", authHandler.Logout)
+		// Token exchange: 10 requests per minute per IP.
+		publicAuth.POST("/token", middleware.RateLimitByIP(middleware.TokenRatePerMin, middleware.TokenRatePerMin), h.TokenExchange)
+	}
 
-		// Protected routes
-		authGroup.Use(middleware.AuthMiddleware(authService))
-		authGroup.GET("/me", authHandler.GetCurrentUser)
+	// Public client-scoped routes
+	r.GET("/clients/:client_id/auth/providers", h.ListEnabledProviders)
+
+	// Protected auth routes (require a valid bearer token)
+	protectedAuth := r.Group("/auth")
+	protectedAuth.Use(middleware.AuthMiddleware(authService), middleware.CSRFMiddleware())
+	{
+		protectedAuth.POST("/logout", h.Logout)
+		protectedAuth.GET("/me", h.GetCurrentUser)
+	}
+
+	// Client management routes (admin only)
+	// Admin endpoints: 30 requests per minute per authenticated user.
+	clientsGroup := r.Group("/clients")
+	clientsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
+	{
+		clientsGroup.GET("", h.ListClients)
+		clientsGroup.GET("/:client_id", h.GetClient)
+		clientsGroup.POST("", h.CreateClient)
+		clientsGroup.PATCH("/:client_id", h.UpdateClient)
+		clientsGroup.POST("/:client_id/regenerate-secret", h.RegenerateClientSecret)
+		clientsGroup.DELETE("/:client_id", h.DeleteClient)
+	}
+
+	// Client-scoped provider routes (admin only)
+	clientProviderGroup := r.Group("/clients/:client_id/providers")
+	clientProviderGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
+	{
+		clientProviderGroup.GET("", h.ListProviders)
+		clientProviderGroup.GET("/:id", h.GetProvider)
+		clientProviderGroup.POST("", h.CreateProvider)
+		clientProviderGroup.PATCH("/:id", h.UpdateProvider)
+		clientProviderGroup.DELETE("/:id", h.DeleteProvider)
+	}
+
+	// User management routes (admin only)
+	usersGroup := r.Group("/users")
+	usersGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
+	{
+		usersGroup.GET("", h.ListUsers)
+		usersGroup.PATCH("/:id", h.UpdateUserStatus)
+	}
+
+	// Session management routes (admin only)
+	sessionsGroup := r.Group("/sessions")
+	sessionsGroup.Use(middleware.AuthMiddleware(authService), middleware.AdminMiddleware(userService), middleware.RateLimitByUser(middleware.AdminRatePerMin, middleware.AdminRatePerMin), middleware.CSRFMiddleware())
+	{
+		sessionsGroup.GET("/codes", h.ListAuthorizationCodes)
+		sessionsGroup.DELETE("/codes/:id", h.RevokeAuthorizationCode)
+		sessionsGroup.GET("/tokens", h.ListAccessTokens)
+		sessionsGroup.DELETE("/tokens/:id", h.RevokeAccessToken)
 	}
 }

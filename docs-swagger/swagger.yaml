@@ -1,0 +1,1357 @@
+basePath: /
+definitions:
+  internal_transport_http_api_v1_handler.AccessTokenResponse:
+    properties:
+      client_id:
+        type: string
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      is_revoked:
+        type: boolean
+      scope:
+        type: string
+      user_id:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.AuthorizationCodeResponse:
+    properties:
+      client_id:
+        type: string
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      is_revoked:
+        type: boolean
+      provider_id:
+        type: string
+      redirect_uri:
+        type: string
+      scope:
+        type: string
+      used_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.ClientResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.ClientWithSecretResponse:
+    properties:
+      client_secret:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.CreateClientRequest:
+    properties:
+      description:
+        type: string
+      grant_types:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      is_active:
+        type: boolean
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - grant_types
+    - name
+    - redirect_uris
+    type: object
+  internal_transport_http_api_v1_handler.CreateProviderRequest:
+    properties:
+      auth_url:
+        type: string
+      display_name:
+        type: string
+      is_enabled:
+        type: boolean
+      name:
+        type: string
+      provider_client_id:
+        type: string
+      provider_client_secret:
+        type: string
+      scopes:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      token_url:
+        type: string
+      user_info_url:
+        type: string
+    required:
+    - auth_url
+    - display_name
+    - name
+    - provider_client_id
+    - provider_client_secret
+    - scopes
+    - token_url
+    - user_info_url
+    type: object
+  internal_transport_http_api_v1_handler.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.GetCurrentUserResponse:
+    properties:
+      user:
+        $ref: '#/definitions/internal_transport_http_api_v1_handler.UserDTO'
+    type: object
+  internal_transport_http_api_v1_handler.ListAccessTokensResponse:
+    properties:
+      tokens:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.AccessTokenResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  internal_transport_http_api_v1_handler.ListAuthorizationCodesResponse:
+    properties:
+      codes:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.AuthorizationCodeResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  internal_transport_http_api_v1_handler.ListClientsResponse:
+    properties:
+      clients:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.ClientResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  internal_transport_http_api_v1_handler.ListProvidersResponse:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.ProviderResponse'
+        type: array
+    type: object
+  internal_transport_http_api_v1_handler.ListPublicProvidersResponse:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.PublicProviderResponse'
+        type: array
+    type: object
+  internal_transport_http_api_v1_handler.ListUsersResponse:
+    properties:
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.UserResponse'
+        type: array
+    type: object
+  internal_transport_http_api_v1_handler.ProviderResponse:
+    properties:
+      auth_url:
+        type: string
+      client_id:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      is_enabled:
+        type: boolean
+      name:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      token_url:
+        type: string
+      updated_at:
+        type: string
+      user_info_url:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.PublicProviderResponse:
+    properties:
+      display_name:
+        type: string
+      name:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.TokenExchangeRequest:
+    properties:
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      code:
+        type: string
+      grant_type:
+        type: string
+      redirect_uri:
+        type: string
+    required:
+    - client_id
+    - client_secret
+    - code
+    - grant_type
+    - redirect_uri
+    type: object
+  internal_transport_http_api_v1_handler.TokenExchangeResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      scope:
+        type: string
+      token_type:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.UpdateClientRequest:
+    properties:
+      description:
+        type: string
+      grant_types:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - grant_types
+    - name
+    - redirect_uris
+    type: object
+  internal_transport_http_api_v1_handler.UpdateProviderRequest:
+    properties:
+      auth_url:
+        type: string
+      display_name:
+        type: string
+      is_enabled:
+        type: boolean
+      provider_client_id:
+        type: string
+      provider_client_secret:
+        description: 'optional: empty retains existing secret'
+        type: string
+      scopes:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      token_url:
+        type: string
+      user_info_url:
+        type: string
+    required:
+    - auth_url
+    - display_name
+    - provider_client_id
+    - scopes
+    - token_url
+    - user_info_url
+    type: object
+  internal_transport_http_api_v1_handler.UpdateUserStatusRequest:
+    properties:
+      is_active:
+        type: boolean
+    type: object
+  internal_transport_http_api_v1_handler.UserDTO:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      locale:
+        type: string
+    type: object
+  internal_transport_http_api_v1_handler.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      first_name:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_admin:
+        type: boolean
+      last_login_at:
+        type: string
+      last_name:
+        type: string
+      locale:
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: API Support
+  description: |-
+    OAuth 2.0 Authorization Code Grant server with client-scoped provider management.
+
+    ## OAuth 2.0 Authorization Code Flow
+
+    ### 1. Discover Enabled Providers
+    Fetch the list of OAuth providers enabled for your client:
+
+    GET /api/v1/clients/{client_id}/auth/providers
+
+    Returns provider `name` and `display_name` fields only — no credentials or internal URLs.
+
+    ### 2. Initiate Authorization
+    Redirect the user's browser to the login endpoint:
+
+    GET /web/auth/{client_id}/{provider}/login?redirect_uri={your_redirect_uri}&scope={optional_scope}
+
+    The server validates the client and provider, stores a signed session cookie containing
+    the CSRF state, and redirects the user to the OAuth provider's authorization page.
+
+    ### 3. Handle Provider Callback
+    The OAuth provider redirects the user back to the server's callback endpoint:
+
+    GET /web/auth/{client_id}/{provider}/callback?code=...&state=...
+
+    The server validates the CSRF state, exchanges the provider code for user info,
+    creates or updates the user record, issues an authorization code, and redirects to:
+
+    {redirect_uri}?code={authorization_code}
+
+    ### 4. Exchange Code for Access Token
+    Your server exchanges the authorization code for a JWT access token:
+
+    POST /api/v1/auth/token
+    Content-Type: application/json
+
+    {
+    "grant_type":    "authorization_code",
+    "code":          "{authorization_code}",
+    "client_id":     "{client_uuid}",
+    "client_secret": "{client_secret}",
+    "redirect_uri":  "{your_redirect_uri}"
+    }
+
+    Authorization codes expire after **5 minutes** and are single-use.
+
+    ### 5. Use the Access Token
+    Include the JWT in the `Authorization` header for authenticated requests:
+
+    Authorization: Bearer {access_token}
+
+    Tokens are ECDSA-signed JWTs that expire after **60 minutes** (configurable via
+    `ACCESS_TOKEN_EXPIRY_MINUTES`). Revoked tokens are rejected at the middleware layer.
+
+    ### 6. Logout
+    Revoke the access token server-side and clear the session cookie:
+
+    POST /api/v1/auth/logout
+    Authorization: Bearer {access_token}
+  license:
+    name: GPL-3.0 license
+  title: Goauth Server API
+  version: 0.2.0
+paths:
+  /api/v1/auth/logout:
+    post:
+      description: Revokes the bearer access token and clears the session cookie.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout current user
+      tags:
+      - Auth
+  /api/v1/auth/me:
+    get:
+      description: Returns profile information for the currently authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.GetCurrentUserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /api/v1/auth/token:
+    post:
+      consumes:
+      - application/json
+      description: OAuth 2.0 token endpoint. Only the authorization_code grant type
+        is supported.
+      parameters:
+      - description: Token exchange request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.TokenExchangeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.TokenExchangeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      summary: Exchange authorization code for access token
+      tags:
+      - Auth
+  /api/v1/clients:
+    get:
+      description: Returns a paginated list of client applications. Admin only.
+      parameters:
+      - default: 20
+        description: Items per page (1-100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Zero-based offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListClientsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List clients
+      tags:
+      - Clients
+    post:
+      consumes:
+      - application/json
+      description: Creates a new client application. Returns the client with the plain
+        secret (returned once only). Admin only.
+      parameters:
+      - description: Create client request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.CreateClientRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ClientWithSecretResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a client
+      tags:
+      - Clients
+  /api/v1/clients/{client_id}:
+    delete:
+      description: Soft-deletes a client (sets is_active = false). Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a client
+      tags:
+      - Clients
+    get:
+      description: Returns a single client application by ID. Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ClientResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a client
+      tags:
+      - Clients
+    patch:
+      consumes:
+      - application/json
+      description: Updates a client's configuration. Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Update client request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.UpdateClientRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ClientResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a client
+      tags:
+      - Clients
+  /api/v1/clients/{client_id}/auth/providers:
+    get:
+      description: Returns provider names and display names enabled for the specified
+        client. No credentials included.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListPublicProvidersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      summary: List enabled providers for a client
+      tags:
+      - Auth
+  /api/v1/clients/{client_id}/providers:
+    get:
+      description: Returns all OAuth providers configured for the specified client.
+        Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListProvidersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List providers for a client
+      tags:
+      - Providers
+    post:
+      consumes:
+      - application/json
+      description: Creates a new OAuth provider scoped to the specified client. Admin
+        only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Create provider request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.CreateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a provider
+      tags:
+      - Providers
+  /api/v1/clients/{client_id}/providers/{id}:
+    delete:
+      description: Permanently removes an OAuth provider, validating client ownership.
+        Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Provider UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a provider
+      tags:
+      - Providers
+    get:
+      description: Returns a single OAuth provider, validating it belongs to the specified
+        client. Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Provider UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a provider
+      tags:
+      - Providers
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing OAuth provider, validating client ownership.
+        Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Provider UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update provider request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.UpdateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a provider
+      tags:
+      - Providers
+  /api/v1/clients/{client_id}/regenerate-secret:
+    post:
+      description: Generates a new client secret. Returns the new plain secret once.
+        Admin only.
+      parameters:
+      - description: Client UUID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ClientWithSecretResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Regenerate client secret
+      tags:
+      - Clients
+  /api/v1/sessions/codes:
+    get:
+      description: Returns a paginated, optionally filtered list of authorization
+        codes. Admin only.
+      parameters:
+      - default: 20
+        description: Items per page (1-100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Zero-based offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by client UUID
+        in: query
+        name: client_id
+        type: string
+      - description: Filter by user UUID
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by revoked status
+        in: query
+        name: is_revoked
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListAuthorizationCodesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List authorization codes
+      tags:
+      - Sessions
+  /api/v1/sessions/codes/{id}:
+    delete:
+      description: Revokes a single authorization code by ID. Admin only.
+      parameters:
+      - description: Authorization code UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke an authorization code
+      tags:
+      - Sessions
+  /api/v1/sessions/tokens:
+    get:
+      description: Returns a paginated, optionally filtered list of access tokens.
+        Admin only.
+      parameters:
+      - default: 20
+        description: Items per page (1-100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Zero-based offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by client UUID
+        in: query
+        name: client_id
+        type: string
+      - description: Filter by user UUID
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by revoked status
+        in: query
+        name: is_revoked
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListAccessTokensResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List access tokens
+      tags:
+      - Sessions
+  /api/v1/sessions/tokens/{id}:
+    delete:
+      description: Revokes a single access token by ID. Admin only.
+      parameters:
+      - description: Access token UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke an access token
+      tags:
+      - Sessions
+  /api/v1/users:
+    get:
+      description: Returns a paginated list of users. Admin only.
+      parameters:
+      - default: 20
+        description: Items per page (1-100)
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Zero-based offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      - description: Filter by admin status
+        in: query
+        name: is_admin
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ListUsersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - Users
+  /api/v1/users/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a user's active status. Admin only.
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update user status request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.UpdateUserStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user status
+      tags:
+      - Users
+  /ops/health:
+    get:
+      description: Returns 200 OK when the server is running.
+      responses:
+        "200":
+          description: OK
+      summary: Health check
+      tags:
+      - Ops
+securityDefinitions:
+  BearerAuth:
+    description: 'ECDSA-signed JWT access token. Format: "Bearer <token>"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -11,6 +11,7 @@ import (
 
 	authserver "github.com/SamuelWang/goauth-server/internal/app/auth-server"
 	"github.com/SamuelWang/goauth-server/internal/config"
+	"github.com/SamuelWang/goauth-server/internal/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -20,6 +21,9 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
+
+	// Initialise Prometheus metrics registry before any handler is registered.
+	metrics.Init()
 
 	// Load configuration
 	cfg, err := config.Load()

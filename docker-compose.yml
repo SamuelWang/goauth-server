@@ -1,0 +1,170 @@
+# Docker Compose configuration for Goauth Server
+#
+# Usage:
+#   cp .env.example .env   # fill in required values (see comments in .env.example)
+#   docker compose up --build
+#
+# Services:
+#   postgres  – PostgreSQL 17 database with persistent volume
+#   migrate   – Runs all pending db/migrations/*.up.sql (exits 0 on success)
+#   server    – Goauth API server (starts after migrate completes)
+
+services:
+
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────
+  postgres:
+    container_name: goauth_postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-goauth}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}
+      POSTGRES_DB: ${DB_NAME:-goauth}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:${DB_PORT:-5432}"
+    healthcheck:
+      # Use the container's own POSTGRES_USER / POSTGRES_DB env vars for reliability
+      # $$ escapes the variable so Docker Compose passes it to the container shell
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+  # ─── Database Migrations ──────────────────────────────────────────────────
+  # Uses the official golang-migrate image to apply all pending migrations.
+  # The service exits with code 0 once migrations succeed; the server waits
+  # for this (service_completed_successfully) before starting.
+  migrate:
+    container_name: goauth_migrate
+    image: migrate/migrate:4
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${DB_USER:-goauth}:${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}@postgres:5432/${DB_NAME:-goauth}?sslmode=disable"
+      - "up"
+    volumes:
+      - ./db/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - goauth_net
+    restart: on-failure
+
+  # ─── Goauth API Server ────────────────────────────────────────────────────
+  server:
+    container_name: goauth_server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: goauth-server:latest
+    environment:
+      # Application
+      APP_NAME: ${APP_NAME:-goauth-server}
+      VERSION: ${VERSION:-0.2.0}
+
+      # Server – HOST/SCHEME are used to construct the OAuth callback URL
+      ENV: ${ENV:-development}
+      SCHEME: ${SCHEME:-http}
+      HOST: ${HOST:-localhost}
+      PORT: ${PORT:-8080}
+
+      # Database – always point at the postgres service inside the Docker network
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-goauth}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required – set it in .env}
+      DB_NAME: ${DB_NAME:-goauth}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+
+      # Access tokens (ES256 / ECDSA P-256 PEM strings; required)
+      ACCESS_TOKEN_PRIVATE_KEY: ${ACCESS_TOKEN_PRIVATE_KEY:?ACCESS_TOKEN_PRIVATE_KEY is required – set it in .env}
+      ACCESS_TOKEN_PUBLIC_KEY: ${ACCESS_TOKEN_PUBLIC_KEY:?ACCESS_TOKEN_PUBLIC_KEY is required – set it in .env}
+      ACCESS_TOKEN_EXPIRY_MINUTES: ${ACCESS_TOKEN_EXPIRY_MINUTES:-60}
+
+      # Security keys (hex-encoded 32-byte values; required)
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:?PROVIDER_ENCRYPTION_KEY is required – set it in .env}
+      SESSION_SIGNING_KEY: ${SESSION_SIGNING_KEY:?SESSION_SIGNING_KEY is required – set it in .env}
+
+      # CORS – comma-separated allowed origins (leave blank in development)
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${PORT:-8080}/ops/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+  # ─── Prometheus ────────────────────────────────────────────────────────────
+  # Scrapes metrics from /metrics on the server service every 15 seconds and
+  # evaluates the alert rules defined in monitoring/prometheus/alerts.yml.
+  prometheus:
+    container_name: goauth_prometheus
+    image: prom/prometheus:v3.4.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - server
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+  # ─── Grafana ───────────────────────────────────────────────────────────────
+  # Provides dashboards for the Prometheus metrics.  The Prometheus data source
+  # and the Goauth dashboard are provisioned automatically on startup.
+  grafana:
+    container_name: goauth_grafana
+    image: grafana/grafana:11.6.1
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required – set it in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - goauth_net
+    restart: unless-stopped
+
+# ─── Networks ────────────────────────────────────────────────────────────────
+networks:
+  goauth_net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

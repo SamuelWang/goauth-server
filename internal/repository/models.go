@@ -11,6 +11,63 @@ import (
 	"github.com/google/uuid"
 )
 
+type AccessToken struct {
+	ID        uuid.UUID
+	TokenHash string
+	ClientID  uuid.UUID
+	UserID    uuid.UUID
+	Scope     *string
+	ExpiresAt time.Time
+	IsRevoked *bool
+	CreatedAt time.Time
+}
+
+type AuthorizationCode struct {
+	ID                  uuid.UUID
+	Code                string
+	ClientID            uuid.UUID
+	UserID              uuid.UUID
+	ProviderID          uuid.UUID
+	RedirectUri         string
+	Scope               *string
+	State               *string
+	CodeChallenge       *string
+	CodeChallengeMethod *string
+	ExpiresAt           time.Time
+	UsedAt              *time.Time
+	IsRevoked           *bool
+	CreatedAt           time.Time
+}
+
+type Client struct {
+	ID               uuid.UUID
+	Name             string
+	Description      *string
+	ClientSecretHash string
+	RedirectUris     []string
+	GrantTypes       []string
+	IsActive         *bool
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type OauthProvider struct {
+	ID                   uuid.UUID
+	ClientID             uuid.UUID
+	Name                 string
+	DisplayName          string
+	ProviderClientID     string
+	ProviderClientSecret string
+	AuthUrl              string
+	TokenUrl             string
+	UserInfoUrl          string
+	Scopes               []string
+	IsEnabled            *bool
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
 type SchemaMigration struct {
 	Version int64
 	Dirty   bool
@@ -30,4 +87,5 @@ type User struct {
 	LastLoginAt   time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	IsAdmin       *bool
 }

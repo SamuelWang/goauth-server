@@ -14,8 +14,8 @@ overrides:
         nullable: true
 sql:
   - engine: 'postgresql'
-    schema: 'internal/db/schema'
-    queries: 'internal/db/queries'
+    schema: 'db/schema'
+    queries: 'db/queries'
     gen:
       go:
         package: 'repository'

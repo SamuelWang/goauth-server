@@ -2,59 +2,56 @@ package auth
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 
-	"github.com/SamuelWang/goauth-server/internal/auth"
 	"github.com/SamuelWang/goauth-server/internal/config"
-	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/provider"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
-type AuthService struct {
-	cfg                *config.Config
-	repo               *repository.Queries
-	accessTokenManager *auth.AccessTokenManager
+// providerServicer is the subset of provider.Service used by the auth service.
+// Using an interface here enables mock injection in unit tests.
+type providerServicer interface {
+	GetProviderWithSecretByClientAndName(ctx context.Context, clientID uuid.UUID, name string) (*provider.OAuthProviderWithSecret, error)
 }
 
-func New(repo *repository.Queries, cfg *config.Config, accessTokenManager *auth.AccessTokenManager) *AuthService {
-	svc := &AuthService{
-		cfg:                cfg,
-		repo:               repo,
-		accessTokenManager: accessTokenManager,
-	}
-
-	return svc
+type Service struct {
+	cfg         *config.Config
+	privateKey  *ecdsa.PrivateKey
+	publicKey   *ecdsa.PublicKey
+	repo        repository.Querier
+	providerSvc providerServicer
 }
 
-func (s *AuthService) ValidateAccessToken(tokenString string) (*auth.Claims, error) {
-	return s.accessTokenManager.ValidateToken(tokenString)
+type Claims struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+	jwt.RegisteredClaims
 }
 
-func (s *AuthService) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
-	parsedUUID, err := uuid.Parse(userID)
+func New(repo repository.Querier, cfg *config.Config, providerSvc providerServicer) (*Service, error) {
+	// Parse private key
+	privateKey, err := parsePrivateKey(cfg.AccessToken.PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
-	user, err := s.repo.GetUserByID(ctx, parsedUUID)
+	// Parse public key
+	publicKey, err := parsePublicKey(cfg.AccessToken.PublicKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
 	}
 
-	userModel := &models.User{
-		ID:            user.ID,
-		Email:         user.Email,
-		EmailVerified: user.EmailVerified,
-		FirstName:     user.FirstName,
-		LastName:      user.LastName,
-		Locale:        user.Locale,
-		CreatedAt:     user.CreatedAt.UTC(),
-		UpdatedAt:     user.UpdatedAt.UTC(),
-		Provider:      user.Provider,
-		ProviderID:    user.ProviderID,
-		ProviderData:  user.ProviderData,
-		LastLoginAt:   user.LastLoginAt.UTC(),
+	svc := &Service{
+		cfg:         cfg,
+		privateKey:  privateKey,
+		publicKey:   publicKey,
+		repo:        repo,
+		providerSvc: providerSvc,
 	}
-	return userModel, nil
+
+	return svc, nil
 }

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goauth
+  labels:
+    app.kubernetes.io/name: goauth-server
+    app.kubernetes.io/version: "0.2.0"
