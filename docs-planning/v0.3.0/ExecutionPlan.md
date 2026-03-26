@@ -81,8 +81,8 @@ ALTER TABLE clients
 *Down:* `ALTER TABLE clients DROP COLUMN` for both columns.
 
 **Acceptance Criteria:**
-- [ ] Up and down apply cleanly
-- [ ] Existing client rows default to `is_confidential=true`, `allow_refresh_tokens=false`
+- [x] Up and down apply cleanly
+- [x] Existing client rows default to `is_confidential=true`, `allow_refresh_tokens=false`
 
 #### Sub-task 1.3 — Migration: create `refresh_tokens` table
 
