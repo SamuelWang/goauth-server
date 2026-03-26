@@ -96,9 +96,9 @@ migrate create -ext sql -dir ./db/migrations create_refresh_tokens_table
 *Down:* `DROP TABLE IF EXISTS refresh_tokens CASCADE`.
 
 **Acceptance Criteria:**
-- [ ] All columns, constraints, and indexes created as specified
-- [ ] Foreign key referential integrity enforced (test with an insert + parent delete)
-- [ ] Migration and rollback succeed
+- [x] All columns, constraints, and indexes created as specified
+- [x] Foreign key referential integrity enforced (test with an insert + parent delete)
+- [x] Migration and rollback succeed
 
 #### Sub-task 1.4 — Migration: create `audit_log` table
 
