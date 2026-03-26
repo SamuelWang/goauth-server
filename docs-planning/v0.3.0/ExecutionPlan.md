@@ -60,9 +60,9 @@ Create index `idx_users_locked_until ON users(locked_until)` (supports lock-expi
 *Down:* `DROP INDEX` then `ALTER TABLE users DROP COLUMN` for all five columns.
 
 **Acceptance Criteria:**
-- [ ] Up migration applies cleanly on top of existing v0.2.0 schema
-- [ ] Down migration restores the table to its previous state
-- [ ] Column defaults match specification
+- [x] Up migration applies cleanly on top of existing v0.2.0 schema
+- [x] Down migration restores the table to its previous state
+- [x] Column defaults match specification
 
 #### Sub-task 1.2 — Migration: extend `clients` table
 
