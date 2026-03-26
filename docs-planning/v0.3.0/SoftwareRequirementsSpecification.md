@@ -13,23 +13,29 @@ This document specifies the software requirements for the GoAuth project, versio
 * Authorization Code Grant with Refresh Tokens
 * Client Manual for Frontend Integration
 
+### Requirement Changes
+
+| ID | Area | Change | Previous Requirement | Updated Requirement |
+|----|------|--------|----------------------|---------------------|
+| RC-001 | Client Secret Hashing | Algorithm changed from Bcrypt to SHA-256 | Client secrets MUST be hashed using Bcrypt before storage. | Client secrets MUST be hashed using SHA-256 before storage. |
+
 ## Functional Requirements
 
 ### Default Administrator Account
 
 - The system MUST support creating a default administrator account at startup when no administrator exists.
-- The default administrator credentials MUST be supplied via environment variables named `DEFAULT_ADMIN_USERNAME` and `DEFAULT_ADMIN_PASSWORD`.
-- If both `DEFAULT_ADMIN_USERNAME` and `DEFAULT_ADMIN_PASSWORD` are present and there is no existing administrator user, the system MUST create an administrator user with the supplied username and password during application startup.
+- The default administrator credentials MUST be supplied via environment variables named `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
+- If both `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` are present and there is no existing administrator user, the system MUST create an administrator user with the supplied email address and password during application startup.
 - The system MUST NOT store the plaintext default password. The password MUST be hashed using the application's standard password hashing mechanism before persisting to the database.
 - The system MUST force a password change on first login for an account created from default credentials and MUST log the event (audit entry) for compliance.
 - Using default admin credentials MUST be restricted for production deployments. By default production mode MUST ignore these environment variables unless an explicit opt-in variable `ALLOW_DEFAULT_ADMIN=true` is set. The system SHOULD emit a clear warning in logs when a default admin account is created.
-- If the provided credentials fail validation (e.g., username empty, password fails complexity requirements), application startup MUST fail with a descriptive error message.
+- If the provided credentials fail validation (e.g., email empty or not a valid email address, password fails complexity requirements), application startup MUST fail with a descriptive error message.
 - The system MUST provide a documented procedure for revoking and rotating the default administrator credentials (for example, deleting the created user, forcing password change, or setting the variables to empty and restarting).
 - The environment variables and their security implications MUST be documented in the project documentation and deployment guides.
 
 **Environment variable examples**
 
-- `DEFAULT_ADMIN_USERNAME=admin`
+- `DEFAULT_ADMIN_EMAIL=admin@example.com`
 - `DEFAULT_ADMIN_PASSWORD=ChangeMeNow!`
 - `ALLOW_DEFAULT_ADMIN=false` (default; set to `true` to allow creation in production)
 
@@ -65,6 +71,31 @@ This document specifies the software requirements for the GoAuth project, versio
 - The application MUST protect client secrets and never persist plaintext values from environment variables.
 - Default-client creation MUST be accompanied by audit logging, monitoring, and documented rotation procedures.
 
+### Login with Email and Password
+
+- The system MUST expose a `POST /api/v1/auth/login` endpoint that accepts a user's email address and password as a JSON body.
+- The endpoint MUST validate that the supplied email is a well-formed email address; requests with malformed or missing email values MUST be rejected with `400 Bad Request`.
+- The endpoint MUST verify the supplied password against the stored hash using the application's standard password hashing mechanism (Argon2id by default).
+- Passwords submitted to this endpoint and to any registration or password-change flow MUST conform to the following **common password policy**:
+  - Minimum length of **12 characters**.
+  - At least one **uppercase letter** (A–Z).
+  - At least one **lowercase letter** (a–z).
+  - At least one **digit** (0–9).
+  - At least one **special character** from the set: `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; : ' " , . < > / ? \ | ~`.
+  - MUST NOT be a known commonly-used password (checked against a deny-list of at least the OWASP/NIST top-1000 weak passwords).
+  - MUST NOT contain the user's email address or username as a substring (case-insensitive).
+- On successful authentication:
+  - If `force_password_change=false`: the endpoint returns an access token (JWT) and, where applicable, a refresh token.
+  - If `force_password_change=true`: the endpoint returns a short-lived change-password challenge token instead of an access token; the user MUST call `POST /api/v1/auth/change-password` to obtain a full access token.
+- On failed authentication (wrong password, unknown email, or locked account): the endpoint MUST return `401 Unauthorized` with a generic error message. Specific failure reasons (e.g., wrong password vs. unknown user) MUST NOT be disclosed to prevent user enumeration.
+- Failed login attempts MUST be rate-limited and the event MUST be recorded in the audit log (without the supplied password value).
+- The system MUST implement an account lockout policy: if a user account accumulates **5 or more failed login attempts within a 10-minute sliding window**, the account MUST be locked for **15 minutes**. During the lockout period all login attempts for that account MUST be rejected with `429 Too Many Requests` and a `Retry-After` header indicating when the lockout expires. The lockout timer resets after a successful login.
+- The account lockout state and failed-attempt counter MUST be persisted in the database (not in memory alone) so that lockout survives application restarts and is consistent across horizontally scaled instances.
+- An audit log entry of type `account_locked` MUST be written when an account transitions into the locked state, recording the email and the source IP address (never the password). A corresponding `account_unlocked` entry MUST be written when the lockout expires or when an administrator manually unlocks the account.
+- Administrators MUST be able to manually unlock a locked account via an admin API endpoint (`DELETE /api/v1/admin/users/{id}/lockout`).
+- The failed-attempt threshold, lockout window, and lockout duration MUST be configurable via environment variables (`LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_SECONDS`, `LOGIN_LOCKOUT_DURATION_SECONDS`) with the defaults stated above.
+- The plaintext password MUST never be stored, logged, or included in any audit entry.
+
 ### Authorization Code Grant — Refresh Tokens
 
 - The system MUST issue refresh tokens when using the OAuth 2.0 Authorization Code Grant to support long-lived sign-in sessions where the client requests an `offline_access` scope or equivalent.
@@ -83,7 +114,7 @@ This document specifies the software requirements for the GoAuth project, versio
 
 ### Security
 
-- **Password and secret handling:** All passwords and client secrets MUST be hashed or encrypted using the application's standard secure mechanisms (for example, Argon2/Bcrypt for passwords and a KMS/encryption-at-rest mechanism for client secrets). Secrets MUST never be logged or included in audit messages.
+- **Password and secret handling:** All passwords MUST be hashed using the application's standard secure mechanisms (Argon2id by default). Client secrets MUST be hashed using SHA-256 before storage. Secrets MUST never be logged or included in audit messages.
 - **Transport security:** All network traffic carrying credentials, tokens, or other sensitive information MUST be protected by TLS (HTTPS) in production.
 - **Default-credential protections:** Environment-driven default account/client bootstrap features MUST be disabled by default in production and require an explicit opt-in (`ALLOW_DEFAULT_ADMIN`, `ALLOW_DEFAULT_CLIENT`, etc.). Creation of default credentials MUST emit a high-visibility warning in logs and an audit entry (without secret material).
 - **Audit logging:** Security-relevant events (account creation, default bootstrap, refresh-token issuance/rotation/revocation, detected replay, admin actions) MUST be logged to an append-only audit log. Audit entries MUST NOT contain secrets or token values.
@@ -134,11 +165,13 @@ This document specifies the software requirements for the GoAuth project, versio
 
 ## Acceptance Criteria
 
-- **Default admin creation:** When `DEFAULT_ADMIN_USERNAME` and `DEFAULT_ADMIN_PASSWORD` are provided and no admin exists, the application creates an admin account at startup (with `ALLOW_DEFAULT_ADMIN` semantics applied). The stored password is hashed and the user is marked to require password change on first login. An audit entry is created (without the password).
+- **Default admin creation:** When `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` are provided and no admin exists, the application creates an admin account at startup (with `ALLOW_DEFAULT_ADMIN` semantics applied). The stored password is hashed and the user is marked to require password change on first login. An audit entry is created (without the password).
 - **Default client creation:** When `DEFAULT_CLIENT_ID` and `DEFAULT_CLIENT_SECRET` are provided and no client exists, the application creates the client at startup (with `ALLOW_DEFAULT_CLIENT` semantics applied). The stored client secret is not logged in cleartext, and creation is audited.
 - **Refresh token issuance and rotation:** The authorization code flow issues refresh tokens for eligible clients; when rotation is enabled, using a refresh token invalidates the previous token and issues a new one. Reuse of an invalidated refresh token triggers immediate revocation of related tokens and writes an audit event describing the incident.
 - **Revocation endpoint:** The token revocation endpoint accepts authenticated revocation requests per RFC 7009 and causes immediate invalidation of the target token(s).
-- **Config validation:** If bootstrap environment variables fail validation (empty username, invalid redirect URIs, weak password), application startup fails with a descriptive error.
+- **Config validation:** If bootstrap environment variables fail validation (empty or invalid email, invalid redirect URIs, weak password), application startup fails with a descriptive error.
+- **Login endpoint:** `POST /api/v1/auth/login` accepts a valid email and password, validates the credentials, enforces the common password policy, and returns an access token (and a change-password challenge token when `force_password_change=true`).
+- **Account lockout:** After 5 consecutive failed login attempts within a 10-minute window the account is locked for 15 minutes; subsequent attempts during the lockout return `429 Too Many Requests` with a `Retry-After` header. An `account_locked` audit entry is written. Thresholds are configurable via `LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_SECONDS`, and `LOGIN_LOCKOUT_DURATION_SECONDS`.
 
 ## Traceability
 
