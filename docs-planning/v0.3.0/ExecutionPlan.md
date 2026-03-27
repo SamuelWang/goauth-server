@@ -302,8 +302,8 @@ Add test cases covering:
 - Verify existing tests still pass.
 
 **Acceptance Criteria:**
-- [ ] New test cases added for all three new structs
-- [ ] `go test ./internal/config/...` passes
+- [x] New test cases added for all three new structs
+- [x] `go test ./internal/config/...` passes
 
 ### Task 3 — Audit Log Service
 
