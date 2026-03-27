@@ -261,13 +261,7 @@ func toAuthorizationCode(r repository.AuthorizationCode) AuthorizationCode {
 		RedirectURI: r.RedirectUri,
 		Scope:       r.Scope,
 		ExpiresAt:   r.ExpiresAt,
-		UsedAt: func() *time.Time {
-			if r.UsedAt.IsZero() {
-				return nil
-			}
-			t := r.UsedAt
-			return &t
-		}(),
+		UsedAt: r.UsedAt,
 		IsRevoked: isRevoked,
 		CreatedAt: r.CreatedAt,
 	}

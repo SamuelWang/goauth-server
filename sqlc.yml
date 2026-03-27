@@ -11,6 +11,7 @@ overrides:
         go_type: "time.Time"
       - db_type: "pg_catalog.timestamptz"
         go_type: "time.Time"
+        pointer: true
         nullable: true
 sql:
   - engine: 'postgresql'

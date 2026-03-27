@@ -45,7 +45,7 @@ type AuthorizationCode struct {
 	CodeChallenge       *string
 	CodeChallengeMethod *string
 	ExpiresAt           time.Time
-	UsedAt              time.Time
+	UsedAt              *time.Time
 	IsRevoked           *bool
 	CreatedAt           time.Time
 }
@@ -94,7 +94,7 @@ type RefreshToken struct {
 	IsRevoked       bool
 	RevokedAt       time.Time
 	RevokeReason    *string
-	UsedAt          time.Time
+	UsedAt          *time.Time
 	CreatedAt       time.Time
 }
 
