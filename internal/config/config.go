@@ -12,6 +12,7 @@ type Config struct {
 	Database    DatabaseConfig
 	AccessToken AccessTokenConfig
 	Security    SecurityConfig
+	Bootstrap   BootstrapConfig
 }
 
 type AppConfig struct {
@@ -39,6 +40,18 @@ type AccessTokenConfig struct {
 	PrivateKey string
 	PublicKey  string
 	Expiry     int // in minutes
+}
+
+type BootstrapConfig struct {
+	AllowDefaultAdmin         bool   // ALLOW_DEFAULT_ADMIN (default: false)
+	DefaultAdminEmail         string // DEFAULT_ADMIN_EMAIL
+	DefaultAdminPassword      string // DEFAULT_ADMIN_PASSWORD
+	AllowDefaultClient        bool   // ALLOW_DEFAULT_CLIENT (default: false)
+	DefaultClientID           string // DEFAULT_CLIENT_ID
+	DefaultClientSecret       string // DEFAULT_CLIENT_SECRET
+	DefaultClientRedirectURIs string // DEFAULT_CLIENT_REDIRECT_URIS (comma-separated)
+	DefaultClientName         string // DEFAULT_CLIENT_NAME (default: "GoAuth Client")
+	DefaultClientConfidential bool   // DEFAULT_CLIENT_CONFIDENTIAL (default: true)
 }
 
 type SecurityConfig struct {
@@ -88,6 +101,17 @@ func Load() (*Config, error) {
 			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
 			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
 			CORSAllowedOrigins:    getEnvAsStringSlice("CORS_ALLOWED_ORIGINS"),
+		},
+		Bootstrap: BootstrapConfig{
+			AllowDefaultAdmin:         getEnvAsBool("ALLOW_DEFAULT_ADMIN", false),
+			DefaultAdminEmail:         getEnv("DEFAULT_ADMIN_EMAIL", ""),
+			DefaultAdminPassword:      getEnv("DEFAULT_ADMIN_PASSWORD", ""),
+			AllowDefaultClient:        getEnvAsBool("ALLOW_DEFAULT_CLIENT", false),
+			DefaultClientID:           getEnv("DEFAULT_CLIENT_ID", ""),
+			DefaultClientSecret:       getEnv("DEFAULT_CLIENT_SECRET", ""),
+			DefaultClientRedirectURIs: getEnv("DEFAULT_CLIENT_REDIRECT_URIS", ""),
+			DefaultClientName:         getEnv("DEFAULT_CLIENT_NAME", "GoAuth Client"),
+			DefaultClientConfidential: getEnvAsBool("DEFAULT_CLIENT_CONFIDENTIAL", true),
 		},
 	}
 
@@ -140,6 +164,18 @@ func getEnvAsInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return value
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return defaultValue
+	}
 }
 
 // getEnvAsStringSlice splits a comma-separated environment variable into a

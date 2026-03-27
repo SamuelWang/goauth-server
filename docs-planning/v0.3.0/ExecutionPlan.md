@@ -228,10 +228,13 @@ type BootstrapConfig struct {
 
 Parse all nine variables in `Load()`. Apply defaults (`DefaultClientName="GoAuth Client"`, `DefaultClientConfidential=true`).
 
+Also update `.env.example` to document all nine new variables under a `# Bootstrap Configuration` section, with each variable commented out and its default shown.
+
 **Acceptance Criteria:**
-- [ ] All nine variables read from environment
-- [ ] String booleans (`"true"`/`"false"`) parsed correctly
-- [ ] Defaults applied when variables are unset
+- [x] All nine variables read from environment
+- [x] String booleans (`"true"`/`"false"`) parsed correctly
+- [x] Defaults applied when variables are unset
+- [x] `.env.example` updated with all nine variables (commented out, with inline documentation)
 
 #### Sub-task 2.2 — Add `RefreshTokenConfig` struct
 
@@ -1134,7 +1137,7 @@ Fix any data races or failures. Confirm coverage targets.
 | Task | Key Deliverables |
 |------|------------------|
 | T1 | 4 migration pairs, `db/queries/refresh_tokens.sql`, `db/queries/audit_log.sql`, updated `db/queries/users.sql` + `clients.sql`, regenerated `internal/repository/`, updated mock |
-| T2 | Updated `internal/config/config.go` + `config_test.go` |
+| T2 | Updated `internal/config/config.go` + `config_test.go`, updated `.env.example` |
 | T3 | `internal/service/audit/audit.go`, `internal/service/audit/events.go` |
 | T4 | Updated `internal/service/client/client.go` (SHA-256 hashing), `RELEASE_NOTES.md` entry |
 | T5 | `internal/app/auth-server/bootstrap.go`, updated `server.go` startup sequence |
