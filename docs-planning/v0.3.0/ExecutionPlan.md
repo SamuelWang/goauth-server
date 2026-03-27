@@ -132,10 +132,8 @@ Add the following named queries to `users.sql`:
 | `CountAdminUsers` | `SELECT COUNT(*) FROM users WHERE is_admin = true` |
 
 **Acceptance Criteria:**
-- [ ] All queries compile with `sqlc vet`
-- [ ] Parameter and result types match column definitions
-
-#### Sub-task 1.6 — SQL queries: `db/queries/clients.sql`
+- [x] All queries compile with `sqlc vet`
+- [x] Parameter and result types match column definitions — SQL queries: `db/queries/clients.sql`
 
 Update `CreateClient` and `UpdateClient` queries to include `is_confidential` and `allow_refresh_tokens` columns in both the `INSERT`/`UPDATE` statements and result rows.
 

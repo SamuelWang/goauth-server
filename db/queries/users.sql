@@ -113,3 +113,84 @@ WHERE
   is_admin = $1
 ORDER BY
   created_at DESC;
+
+-- name: GetUserByEmailForAuth :one
+SELECT
+  *
+FROM
+  users
+WHERE
+  email = $1
+LIMIT
+  1;
+
+-- name: UpdatePasswordHash :one
+UPDATE users
+SET
+  password_hash = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: SetForcePasswordChange :one
+UPDATE users
+SET
+  force_password_change = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: IncrementFailedLoginAttempts :one
+UPDATE users
+SET
+  failed_login_attempts = failed_login_attempts + 1,
+  last_failed_login_at = now(),
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: LockUserAccount :one
+UPDATE users
+SET
+  locked_until = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: ResetLoginAttempts :one
+UPDATE users
+SET
+  failed_login_attempts = 0,
+  last_failed_login_at = NULL,
+  locked_until = NULL,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: UnlockUserAccount :one
+UPDATE users
+SET
+  locked_until = NULL,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  *;
+
+-- name: CountAdminUsers :one
+SELECT
+  COUNT(*)
+FROM
+  users
+WHERE
+  is_admin = true;
