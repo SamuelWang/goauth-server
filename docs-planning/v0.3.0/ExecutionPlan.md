@@ -112,9 +112,9 @@ migrate create -ext sql -dir ./db/migrations create_audit_log_table
 *Down:* `DROP TABLE IF EXISTS audit_log CASCADE`.
 
 **Acceptance Criteria:**
-- [ ] Table has no `updated_at` trigger (append-only)
-- [ ] All four indexes created
-- [ ] Migration and rollback succeed
+- [x] Table has no `updated_at` trigger (append-only)
+- [x] All four indexes created
+- [x] Migration and rollback succeed
 
 #### Sub-task 1.5 — SQL queries: `db/queries/users.sql`
 
