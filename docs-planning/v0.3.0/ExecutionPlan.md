@@ -200,8 +200,8 @@ In `internal/testutil/mocks/querier.go`, add stub implementations for every new 
 Run `db/scripts/dump_schema.sh` against a migrated local database to refresh the canonical schema dump.
 
 **Acceptance Criteria:**
-- [ ] `db/schema/schema.sql` reflects all four new migrations
-- [ ] File committed alongside the migration files
+- [x] `db/schema/schema.sql` reflects all four new migrations
+- [x] File committed alongside the migration files
 
 ### Task 2 — Configuration
 
