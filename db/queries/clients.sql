@@ -26,9 +26,11 @@ INSERT INTO clients (
     redirect_uris,
     grant_types,
     is_active,
-    created_by
+    created_by,
+    is_confidential,
+    allow_refresh_tokens
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 ) RETURNING *;
 
 -- name: UpdateClient :one
@@ -38,6 +40,8 @@ SET
     description = $3,
     redirect_uris = $4,
     grant_types = $5,
+    is_confidential = $6,
+    allow_refresh_tokens = $7,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

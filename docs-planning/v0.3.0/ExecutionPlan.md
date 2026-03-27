@@ -140,9 +140,8 @@ Add the following named queries to `users.sql`:
 Update `CreateClient` and `UpdateClient` queries to include `is_confidential` and `allow_refresh_tokens` columns in both the `INSERT`/`UPDATE` statements and result rows.
 
 **Acceptance Criteria:**
-- [ ] `CreateClient` inserts all new columns
-- [ ] `UpdateClient` can mutate all new columns
-- [ ] Existing query tests still pass after regeneration
+- [x] `CreateClient` inserts all new columns
+- [x] `UpdateClient` can mutate all new columns
 
 #### Sub-task 1.7 — SQL queries: `db/queries/refresh_tokens.sql` (new file)
 
