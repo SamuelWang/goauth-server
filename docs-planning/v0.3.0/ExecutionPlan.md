@@ -290,8 +290,8 @@ After parsing `BootstrapConfig`, add validation:
 - If `DefaultClientRedirectURIs` is non-empty, each URI must parse without error.
 
 **Acceptance Criteria:**
-- [ ] Invalid email in `DEFAULT_ADMIN_EMAIL` causes `Load()` to return an error
-- [ ] Invalid redirect URI in `DEFAULT_CLIENT_REDIRECT_URIS` causes `Load()` to return an error
+- [x] Invalid email in `DEFAULT_ADMIN_EMAIL` causes `Load()` to return an error
+- [x] Invalid redirect URI in `DEFAULT_CLIENT_REDIRECT_URIS` causes `Load()` to return an error
 
 #### Sub-task 2.6 — Update `config_test.go`
 

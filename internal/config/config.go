@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net/mail"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -177,6 +179,34 @@ func Load() (*Config, error) {
 	}
 	if cfg.Security.SessionSigningKey == "" {
 		return nil, fmt.Errorf("SESSION_SIGNING_KEY is required")
+	}
+
+	// Validate BootstrapConfig fields that carry user-supplied values.
+	if cfg.Bootstrap.DefaultAdminEmail != "" {
+		if _, err := mail.ParseAddress(cfg.Bootstrap.DefaultAdminEmail); err != nil {
+			return nil, fmt.Errorf("DEFAULT_ADMIN_EMAIL is not a valid email address: %w", err)
+		}
+	}
+
+	// Password policy validation (internal/util/password) is deferred to T7
+	// when that package is implemented. A TODO is left here so the call site is
+	// already wired correctly once the package exists.
+	// TODO(T7): if cfg.Bootstrap.DefaultAdminPassword != "" && cfg.Bootstrap.DefaultAdminEmail != "" {
+	//     if err := password.Validate(cfg.Bootstrap.DefaultAdminPassword, cfg.Bootstrap.DefaultAdminEmail); err != nil {
+	//         return nil, fmt.Errorf("DEFAULT_ADMIN_PASSWORD does not meet policy: %w", err)
+	//     }
+	// }
+
+	if cfg.Bootstrap.DefaultClientRedirectURIs != "" {
+		for _, raw := range strings.Split(cfg.Bootstrap.DefaultClientRedirectURIs, ",") {
+			uri := strings.TrimSpace(raw)
+			if uri == "" {
+				continue
+			}
+			if _, err := url.ParseRequestURI(uri); err != nil {
+				return nil, fmt.Errorf("DEFAULT_CLIENT_REDIRECT_URIS contains an invalid URI %q: %w", uri, err)
+			}
+		}
 	}
 
 	return cfg, nil
