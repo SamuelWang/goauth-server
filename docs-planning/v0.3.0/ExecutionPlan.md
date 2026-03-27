@@ -279,8 +279,8 @@ Also update `.env.example` to document all three new variables under a `# Accoun
 Add `Bootstrap BootstrapConfig`, `RefreshToken RefreshTokenConfig`, and `Lockout LockoutConfig` fields to the top-level `Config` struct. Populate them in `Load()` after all existing fields.
 
 **Acceptance Criteria:**
-- [ ] `Config` struct compiles
-- [ ] All existing call sites that read `cfg.Server`, `cfg.DB`, etc. are unaffected
+- [x] `Config` struct compiles
+- [x] All existing call sites that read `cfg.Server`, `cfg.DB`, etc. are unaffected
 
 #### Sub-task 2.5 — Early validation in `Load()`
 
