@@ -192,8 +192,8 @@ Create the file with three named queries:
 In `internal/testutil/mocks/querier.go`, add stub implementations for every new method added to the `Querier` interface (all queries from 1.5–1.8).
 
 **Acceptance Criteria:**
-- [ ] `go build ./...` passes
-- [ ] Mock satisfies the `Querier` interface at compile time
+- [x] `go build ./...` passes
+- [x] Mock satisfies the `Querier` interface at compile time
 
 #### Sub-task 1.11 — Regenerate `db/schema/schema.sql`
 
