@@ -32,20 +32,24 @@ INSERT INTO clients (
     redirect_uris,
     grant_types,
     is_active,
-    created_by
+    created_by,
+    is_confidential,
+    allow_refresh_tokens
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
+) RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens
 `
 
 type CreateClientParams struct {
-	Name             string
-	Description      *string
-	ClientSecretHash string
-	RedirectUris     []string
-	GrantTypes       []string
-	IsActive         *bool
-	CreatedBy        uuid.UUID
+	Name               string
+	Description        *string
+	ClientSecretHash   string
+	RedirectUris       []string
+	GrantTypes         []string
+	IsActive           *bool
+	CreatedBy          uuid.UUID
+	IsConfidential     bool
+	AllowRefreshTokens bool
 }
 
 func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Client, error) {
@@ -57,6 +61,8 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Cli
 		arg.GrantTypes,
 		arg.IsActive,
 		arg.CreatedBy,
+		arg.IsConfidential,
+		arg.AllowRefreshTokens,
 	)
 	var i Client
 	err := row.Scan(
@@ -70,6 +76,8 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Cli
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsConfidential,
+		&i.AllowRefreshTokens,
 	)
 	return i, err
 }
@@ -86,7 +94,7 @@ func (q *Queries) DeleteClient(ctx context.Context, id uuid.UUID) error {
 }
 
 const getClient = `-- name: GetClient :one
-SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at FROM clients
+SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens FROM clients
 WHERE id = $1 LIMIT 1
 `
 
@@ -104,12 +112,14 @@ func (q *Queries) GetClient(ctx context.Context, id uuid.UUID) (Client, error) {
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsConfidential,
+		&i.AllowRefreshTokens,
 	)
 	return i, err
 }
 
 const getClientByID = `-- name: GetClientByID :one
-SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at FROM clients
+SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens FROM clients
 WHERE id = $1 AND is_active = true LIMIT 1
 `
 
@@ -127,12 +137,14 @@ func (q *Queries) GetClientByID(ctx context.Context, id uuid.UUID) (Client, erro
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsConfidential,
+		&i.AllowRefreshTokens,
 	)
 	return i, err
 }
 
 const listClients = `-- name: ListClients :many
-SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at FROM clients
+SELECT id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens FROM clients
 WHERE
     ($1::boolean IS NULL OR is_active = $1)
 ORDER BY created_at DESC
@@ -165,6 +177,8 @@ func (q *Queries) ListClients(ctx context.Context, arg ListClientsParams) ([]Cli
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.IsConfidential,
+			&i.AllowRefreshTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -182,7 +196,7 @@ SET
     client_secret_hash = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at
+RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens
 `
 
 type RegenerateClientSecretParams struct {
@@ -204,6 +218,8 @@ func (q *Queries) RegenerateClientSecret(ctx context.Context, arg RegenerateClie
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsConfidential,
+		&i.AllowRefreshTokens,
 	)
 	return i, err
 }
@@ -215,17 +231,21 @@ SET
     description = $3,
     redirect_uris = $4,
     grant_types = $5,
+    is_confidential = $6,
+    allow_refresh_tokens = $7,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at
+RETURNING id, name, description, client_secret_hash, redirect_uris, grant_types, is_active, created_by, created_at, updated_at, is_confidential, allow_refresh_tokens
 `
 
 type UpdateClientParams struct {
-	ID           uuid.UUID
-	Name         string
-	Description  *string
-	RedirectUris []string
-	GrantTypes   []string
+	ID                 uuid.UUID
+	Name               string
+	Description        *string
+	RedirectUris       []string
+	GrantTypes         []string
+	IsConfidential     bool
+	AllowRefreshTokens bool
 }
 
 func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) (Client, error) {
@@ -235,6 +255,8 @@ func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) (Cli
 		arg.Description,
 		arg.RedirectUris,
 		arg.GrantTypes,
+		arg.IsConfidential,
+		arg.AllowRefreshTokens,
 	)
 	var i Client
 	err := row.Scan(
@@ -248,6 +270,8 @@ func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) (Cli
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsConfidential,
+		&i.AllowRefreshTokens,
 	)
 	return i, err
 }

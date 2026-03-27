@@ -212,7 +212,7 @@ func (s *Service) ExchangeCodeForToken(
 	if authCode.IsRevoked != nil && *authCode.IsRevoked {
 		return nil, ErrCodeRevoked
 	}
-	if authCode.UsedAt != nil {
+	if authCode.UsedAt != (time.Time{}) {
 		return nil, ErrCodeUsed
 	}
 	if time.Now().After(authCode.ExpiresAt) {

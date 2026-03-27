@@ -22,6 +22,17 @@ type AccessToken struct {
 	CreatedAt time.Time
 }
 
+type AuditLog struct {
+	ID        uuid.UUID
+	EventType string
+	UserID    uuid.UUID
+	ClientID  uuid.UUID
+	ActorID   uuid.UUID
+	IpAddress *string
+	Metadata  []byte
+	CreatedAt time.Time
+}
+
 type AuthorizationCode struct {
 	ID                  uuid.UUID
 	Code                string
@@ -34,22 +45,24 @@ type AuthorizationCode struct {
 	CodeChallenge       *string
 	CodeChallengeMethod *string
 	ExpiresAt           time.Time
-	UsedAt              *time.Time
+	UsedAt              time.Time
 	IsRevoked           *bool
 	CreatedAt           time.Time
 }
 
 type Client struct {
-	ID               uuid.UUID
-	Name             string
-	Description      *string
-	ClientSecretHash string
-	RedirectUris     []string
-	GrantTypes       []string
-	IsActive         *bool
-	CreatedBy        uuid.UUID
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                 uuid.UUID
+	Name               string
+	Description        *string
+	ClientSecretHash   string
+	RedirectUris       []string
+	GrantTypes         []string
+	IsActive           *bool
+	CreatedBy          uuid.UUID
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	IsConfidential     bool
+	AllowRefreshTokens bool
 }
 
 type OauthProvider struct {
@@ -68,24 +81,46 @@ type OauthProvider struct {
 	UpdatedAt            time.Time
 }
 
+type RefreshToken struct {
+	ID              uuid.UUID
+	TokenFamilyID   uuid.UUID
+	TokenHash       string
+	ClientID        uuid.UUID
+	UserID          uuid.UUID
+	AccessTokenID   uuid.UUID
+	PreviousTokenID uuid.UUID
+	Scope           string
+	ExpiresAt       time.Time
+	IsRevoked       bool
+	RevokedAt       time.Time
+	RevokeReason    *string
+	UsedAt          time.Time
+	CreatedAt       time.Time
+}
+
 type SchemaMigration struct {
 	Version int64
 	Dirty   bool
 }
 
 type User struct {
-	ID            uuid.UUID
-	Email         string
-	EmailVerified bool
-	FirstName     *string
-	LastName      *string
-	IsActive      bool
-	Locale        string
-	Provider      *string
-	ProviderID    *string
-	ProviderData  *models.OAuthProviderData
-	LastLoginAt   time.Time
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	IsAdmin       *bool
+	ID                  uuid.UUID
+	Email               string
+	EmailVerified       bool
+	FirstName           *string
+	LastName            *string
+	IsActive            bool
+	Locale              string
+	Provider            *string
+	ProviderID          *string
+	ProviderData        *models.OAuthProviderData
+	LastLoginAt         time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	IsAdmin             *bool
+	PasswordHash        *string
+	ForcePasswordChange bool
+	FailedLoginAttempts int32
+	LastFailedLoginAt   time.Time
+	LockedUntil         time.Time
 }

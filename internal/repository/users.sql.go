@@ -13,6 +13,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const countAdminUsers = `-- name: CountAdminUsers :one
+SELECT
+  COUNT(*)
+FROM
+  users
+WHERE
+  is_admin = true
+`
+
+func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT
   COUNT(*)
@@ -51,7 +67,7 @@ INSERT INTO
 VALUES
   ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 `
 
 type CreateUserParams struct {
@@ -94,13 +110,18 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 FROM
   users
 WHERE
@@ -127,13 +148,56 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const getUserByEmailForAuth = `-- name: GetUserByEmailForAuth :one
+SELECT
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+FROM
+  users
+WHERE
+  email = $1
+LIMIT
+  1
+`
+
+func (q *Queries) GetUserByEmailForAuth(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailForAuth, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 FROM
   users
 WHERE
@@ -160,13 +224,18 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
 
 const getUserByProviderID = `-- name: GetUserByProviderID :one
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 FROM
   users
 WHERE
@@ -199,13 +268,18 @@ func (q *Queries) GetUserByProviderID(ctx context.Context, arg GetUserByProvider
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
 
 const getUsersByAdmin = `-- name: GetUsersByAdmin :many
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 FROM
   users
 WHERE
@@ -238,6 +312,11 @@ func (q *Queries) GetUsersByAdmin(ctx context.Context, isAdmin *bool) ([]User, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsAdmin,
+			&i.PasswordHash,
+			&i.ForcePasswordChange,
+			&i.FailedLoginAttempts,
+			&i.LastFailedLoginAt,
+			&i.LockedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -249,9 +328,48 @@ func (q *Queries) GetUsersByAdmin(ctx context.Context, isAdmin *bool) ([]User, e
 	return items, nil
 }
 
+const incrementFailedLoginAttempts = `-- name: IncrementFailedLoginAttempts :one
+UPDATE users
+SET
+  failed_login_attempts = failed_login_attempts + 1,
+  last_failed_login_at = now(),
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+func (q *Queries) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, incrementFailedLoginAttempts, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 FROM
   users
 WHERE
@@ -301,6 +419,11 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsAdmin,
+			&i.PasswordHash,
+			&i.ForcePasswordChange,
+			&i.FailedLoginAttempts,
+			&i.LastFailedLoginAt,
+			&i.LockedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -312,6 +435,170 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const lockUserAccount = `-- name: LockUserAccount :one
+UPDATE users
+SET
+  locked_until = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+type LockUserAccountParams struct {
+	ID          uuid.UUID
+	LockedUntil time.Time
+}
+
+func (q *Queries) LockUserAccount(ctx context.Context, arg LockUserAccountParams) (User, error) {
+	row := q.db.QueryRow(ctx, lockUserAccount, arg.ID, arg.LockedUntil)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const resetLoginAttempts = `-- name: ResetLoginAttempts :one
+UPDATE users
+SET
+  failed_login_attempts = 0,
+  last_failed_login_at = NULL,
+  locked_until = NULL,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+func (q *Queries) ResetLoginAttempts(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, resetLoginAttempts, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const setForcePasswordChange = `-- name: SetForcePasswordChange :one
+UPDATE users
+SET
+  force_password_change = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+type SetForcePasswordChangeParams struct {
+	ID                  uuid.UUID
+	ForcePasswordChange bool
+}
+
+func (q *Queries) SetForcePasswordChange(ctx context.Context, arg SetForcePasswordChangeParams) (User, error) {
+	row := q.db.QueryRow(ctx, setForcePasswordChange, arg.ID, arg.ForcePasswordChange)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const unlockUserAccount = `-- name: UnlockUserAccount :one
+UPDATE users
+SET
+  locked_until = NULL,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+func (q *Queries) UnlockUserAccount(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, unlockUserAccount, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
 const updateLastLogin = `-- name: UpdateLastLogin :one
 UPDATE users
 SET
@@ -320,7 +607,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 `
 
 type UpdateLastLoginParams struct {
@@ -347,6 +634,54 @@ func (q *Queries) UpdateLastLogin(ctx context.Context, arg UpdateLastLoginParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
+	)
+	return i, err
+}
+
+const updatePasswordHash = `-- name: UpdatePasswordHash :one
+UPDATE users
+SET
+  password_hash = $2,
+  updated_at = now()
+WHERE
+  id = $1
+RETURNING
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
+`
+
+type UpdatePasswordHashParams struct {
+	ID           uuid.UUID
+	PasswordHash *string
+}
+
+func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) (User, error) {
+	row := q.db.QueryRow(ctx, updatePasswordHash, arg.ID, arg.PasswordHash)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.EmailVerified,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Locale,
+		&i.Provider,
+		&i.ProviderID,
+		&i.ProviderData,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
@@ -362,7 +697,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 `
 
 type UpdateUserParams struct {
@@ -399,6 +734,11 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }
@@ -411,7 +751,7 @@ SET
 WHERE
   id = $1
 RETURNING
-  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin
+  id, email, email_verified, first_name, last_name, is_active, locale, provider, provider_id, provider_data, last_login_at, created_at, updated_at, is_admin, password_hash, force_password_change, failed_login_attempts, last_failed_login_at, locked_until
 `
 
 type UpdateUserActiveStatusParams struct {
@@ -437,6 +777,11 @@ func (q *Queries) UpdateUserActiveStatus(ctx context.Context, arg UpdateUserActi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.PasswordHash,
+		&i.ForcePasswordChange,
+		&i.FailedLoginAttempts,
+		&i.LastFailedLoginAt,
+		&i.LockedUntil,
 	)
 	return i, err
 }

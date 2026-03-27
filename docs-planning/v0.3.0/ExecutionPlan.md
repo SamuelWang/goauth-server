@@ -184,8 +184,8 @@ Create the file with three named queries:
 3. Ensure `internal/repository/querier.go` interface includes all new methods.
 
 **Acceptance Criteria:**
-- [ ] `sqlc generate` exits 0 with no warnings
-- [ ] Generated structs for `RefreshToken` and `AuditLog` reflect all columns
+- [x] `sqlc generate` exits 0 with no warnings
+- [x] Generated structs for `RefreshToken` and `AuditLog` reflect all columns
 
 #### Sub-task 1.10 — Update mock `Querier`
 

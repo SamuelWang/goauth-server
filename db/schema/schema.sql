@@ -101,7 +101,9 @@ CREATE TABLE public.clients (
     is_active boolean DEFAULT true,
     created_by uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    is_confidential boolean DEFAULT true NOT NULL,
+    allow_refresh_tokens boolean DEFAULT false NOT NULL
 );
 
 
@@ -123,6 +125,44 @@ CREATE TABLE public.oauth_providers (
     is_enabled boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: audit_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.audit_log (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_type text NOT NULL,
+    user_id uuid,
+    client_id uuid,
+    actor_id uuid,
+    ip_address text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: refresh_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.refresh_tokens (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    token_family_id uuid NOT NULL,
+    token_hash text NOT NULL,
+    client_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    access_token_id uuid,
+    previous_token_id uuid,
+    scope text DEFAULT ''::text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    is_revoked boolean DEFAULT false NOT NULL,
+    revoked_at timestamp with time zone,
+    revoke_reason text,
+    used_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -154,7 +194,12 @@ CREATE TABLE public.users (
     last_login_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    is_admin boolean DEFAULT false
+    is_admin boolean DEFAULT false,
+    password_hash text,
+    force_password_change boolean DEFAULT false NOT NULL,
+    failed_login_attempts integer DEFAULT 0 NOT NULL,
+    last_failed_login_at timestamp with time zone,
+    locked_until timestamp with time zone
 );
 
 
@@ -236,6 +281,30 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: audit_log audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_log
+    ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: refresh_tokens refresh_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: refresh_tokens refresh_tokens_token_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_token_hash_key UNIQUE (token_hash);
 
 
 --
@@ -323,10 +392,80 @@ CREATE INDEX idx_users_is_admin ON public.users USING btree (is_admin);
 
 
 --
+-- Name: idx_users_locked_until; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_users_locked_until ON public.users USING btree (locked_until);
+
+
+--
 -- Name: users_provider_provider_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX users_provider_provider_id_key ON public.users USING btree (provider, provider_id);
+
+
+--
+-- Name: idx_audit_log_event_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_log_event_type ON public.audit_log USING btree (event_type);
+
+
+--
+-- Name: idx_audit_log_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_log_user_id ON public.audit_log USING btree (user_id);
+
+
+--
+-- Name: idx_audit_log_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_log_client_id ON public.audit_log USING btree (client_id);
+
+
+--
+-- Name: idx_audit_log_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_log_created_at ON public.audit_log USING btree (created_at);
+
+
+--
+-- Name: idx_refresh_tokens_token_family_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_refresh_tokens_token_family_id ON public.refresh_tokens USING btree (token_family_id);
+
+
+--
+-- Name: idx_refresh_tokens_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_refresh_tokens_user_id ON public.refresh_tokens USING btree (user_id);
+
+
+--
+-- Name: idx_refresh_tokens_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_refresh_tokens_client_id ON public.refresh_tokens USING btree (client_id);
+
+
+--
+-- Name: idx_refresh_tokens_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_refresh_tokens_expires_at ON public.refresh_tokens USING btree (expires_at);
+
+
+--
+-- Name: idx_refresh_tokens_access_token_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_refresh_tokens_access_token_id ON public.refresh_tokens USING btree (access_token_id);
 
 
 --
@@ -404,6 +543,38 @@ ALTER TABLE ONLY public.clients
 
 ALTER TABLE ONLY public.oauth_providers
     ADD CONSTRAINT oauth_providers_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: refresh_tokens refresh_tokens_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
+
+--
+-- Name: refresh_tokens refresh_tokens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: refresh_tokens refresh_tokens_access_token_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_access_token_id_fkey FOREIGN KEY (access_token_id) REFERENCES public.access_tokens(id) ON DELETE SET NULL;
+
+
+--
+-- Name: refresh_tokens refresh_tokens_previous_token_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_previous_token_id_fkey FOREIGN KEY (previous_token_id) REFERENCES public.refresh_tokens(id) ON DELETE SET NULL;
 
 
 --
