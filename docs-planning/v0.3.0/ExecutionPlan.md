@@ -174,8 +174,8 @@ Create the file with three named queries:
 | `CountAuditLogEntries` | Count with same optional filters |
 
 **Acceptance Criteria:**
-- [ ] `CreateAuditLogEntry` parameter type accepts `metadata JSONB` correctly
-- [ ] Queries compile with `sqlc vet`
+- [x] `CreateAuditLogEntry` parameter type accepts `metadata JSONB` correctly
+- [x] Queries compile with `sqlc vet`
 
 #### Sub-task 1.9 — Run `sqlc generate` and reconcile output
 
