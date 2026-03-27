@@ -160,8 +160,8 @@ Create the file with all nine named queries:
 | `DeleteExpiredRefreshTokens` | `DELETE … WHERE expires_at < now()` |
 
 **Acceptance Criteria:**
-- [ ] All queries compile with `sqlc vet`
-- [ ] `RevokeRefreshTokenFamily` updates all rows in the family in one statement
+- [x] All queries compile with `sqlc vet`
+- [x] `RevokeRefreshTokenFamily` updates all rows in the family in one statement
 
 #### Sub-task 1.8 — SQL queries: `db/queries/audit_log.sql` (new file)
 
