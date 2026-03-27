@@ -248,9 +248,12 @@ type RefreshTokenConfig struct {
 
 Parse and apply defaults in `Load()`.
 
+Also update `.env.example` to document all three new variables under a `# Refresh Token Configuration` section, with defaults shown.
+
 **Acceptance Criteria:**
-- [ ] Integer variables parsed with `strconv.Atoi`; invalid values return an error from `Load()`
-- [ ] Defaults applied when variables are unset
+- [x] Integer variables parsed with `strconv.Atoi`; invalid values return an error from `Load()`
+- [x] Defaults applied when variables are unset
+- [x] `.env.example` updated with all three variables and inline documentation
 
 #### Sub-task 2.3 — Add `LockoutConfig` struct
 
@@ -264,9 +267,12 @@ type LockoutConfig struct {
 
 Parse and apply defaults in `Load()`.
 
+Also update `.env.example` to document all three new variables under a `# Account Lockout Configuration` section, with defaults shown.
+
 **Acceptance Criteria:**
-- [ ] All three integer variables parsed; zero/negative values return a validation error
-- [ ] Defaults applied when variables are unset
+- [x] All three integer variables parsed; zero/negative values return a validation error
+- [x] Defaults applied when variables are unset
+- [x] `.env.example` updated with all three variables and inline documentation
 
 #### Sub-task 2.4 — Wire new structs into top-level `Config`
 

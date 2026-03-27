@@ -3,16 +3,19 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	App         AppConfig
-	Server      ServerConfig
-	Database    DatabaseConfig
-	AccessToken AccessTokenConfig
-	Security    SecurityConfig
-	Bootstrap   BootstrapConfig
+	App          AppConfig
+	Server       ServerConfig
+	Database     DatabaseConfig
+	AccessToken  AccessTokenConfig
+	Security     SecurityConfig
+	Bootstrap    BootstrapConfig
+	RefreshToken RefreshTokenConfig
+	Lockout      LockoutConfig
 }
 
 type AppConfig struct {
@@ -40,6 +43,18 @@ type AccessTokenConfig struct {
 	PrivateKey string
 	PublicKey  string
 	Expiry     int // in minutes
+}
+
+type RefreshTokenConfig struct {
+	ExpiryDays      int  // REFRESH_TOKEN_EXPIRY_DAYS (default: 30)
+	RotationEnabled bool // REFRESH_TOKEN_ROTATION_ENABLED (default: true)
+	MaxLifetimeDays int  // REFRESH_TOKEN_MAX_LIFETIME_DAYS (default: 90)
+}
+
+type LockoutConfig struct {
+	MaxAttempts     int // LOGIN_MAX_ATTEMPTS (default: 5)
+	WindowSeconds   int // LOGIN_ATTEMPT_WINDOW_SECONDS (default: 600)
+	DurationSeconds int // LOGIN_LOCKOUT_DURATION_SECONDS (default: 900)
 }
 
 type BootstrapConfig struct {
@@ -115,6 +130,42 @@ func Load() (*Config, error) {
 		},
 	}
 
+	// Parse RefreshTokenConfig — non-numeric values are hard errors.
+	var rtErr error
+	cfg.RefreshToken.ExpiryDays, rtErr = getEnvAsIntOrError("REFRESH_TOKEN_EXPIRY_DAYS", 30)
+	if rtErr != nil {
+		return nil, rtErr
+	}
+	cfg.RefreshToken.RotationEnabled = getEnvAsBool("REFRESH_TOKEN_ROTATION_ENABLED", true)
+	cfg.RefreshToken.MaxLifetimeDays, rtErr = getEnvAsIntOrError("REFRESH_TOKEN_MAX_LIFETIME_DAYS", 90)
+	if rtErr != nil {
+		return nil, rtErr
+	}
+
+	// Parse LockoutConfig — non-numeric and zero/negative values are hard errors.
+	var lockErr error
+	cfg.Lockout.MaxAttempts, lockErr = getEnvAsIntOrError("LOGIN_MAX_ATTEMPTS", 5)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	cfg.Lockout.WindowSeconds, lockErr = getEnvAsIntOrError("LOGIN_ATTEMPT_WINDOW_SECONDS", 600)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	cfg.Lockout.DurationSeconds, lockErr = getEnvAsIntOrError("LOGIN_LOCKOUT_DURATION_SECONDS", 900)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	if cfg.Lockout.MaxAttempts <= 0 {
+		return nil, fmt.Errorf("LOGIN_MAX_ATTEMPTS must be positive, got %d", cfg.Lockout.MaxAttempts)
+	}
+	if cfg.Lockout.WindowSeconds <= 0 {
+		return nil, fmt.Errorf("LOGIN_ATTEMPT_WINDOW_SECONDS must be positive, got %d", cfg.Lockout.WindowSeconds)
+	}
+	if cfg.Lockout.DurationSeconds <= 0 {
+		return nil, fmt.Errorf("LOGIN_LOCKOUT_DURATION_SECONDS must be positive, got %d", cfg.Lockout.DurationSeconds)
+	}
+
 	if cfg.AccessToken.PrivateKey == "" {
 		return nil, fmt.Errorf("ACCESS_TOKEN_PRIVATE_KEY is required")
 	}
@@ -164,6 +215,21 @@ func getEnvAsInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return value
+}
+
+// getEnvAsIntOrError reads an integer environment variable. It returns
+// defaultValue when the variable is unset or empty, and a descriptive error
+// when the value is present but cannot be parsed as an integer.
+func getEnvAsIntOrError(key string, defaultValue int) (int, error) {
+	str := os.Getenv(key)
+	if str == "" {
+		return defaultValue, nil
+	}
+	v, err := strconv.Atoi(strings.TrimSpace(str))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer, got %q", key, str)
+	}
+	return v, nil
 }
 
 func getEnvAsBool(key string, defaultValue bool) bool {
