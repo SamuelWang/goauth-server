@@ -432,8 +432,8 @@ In `internal/service/client/client_test.go` (and any related test files):
 - Add a test asserting `ValidateClientSecret` rejects a bcrypt-format hash string.
 
 **Acceptance Criteria:**
-- [ ] `go test ./internal/service/client/...` passes
-- [ ] No test still sets up bcrypt-hashed secrets as "correct" values
+- [x] `go test ./internal/service/client/...` passes
+- [x] No test still sets up bcrypt-hashed secrets as "correct" values
 
 #### Sub-task 4.5 — Document the breaking change
 

@@ -20,12 +20,16 @@ func newTestService(q *mocks.MockQuerier) *Service {
 	return New(q, "development", nil)
 }
 
+// sampleClientSecret is the plain-text secret whose SHA-256 hash is stored in
+// sampleClient. Tests that exercise secret validation should use this value.
+const sampleClientSecret = "test-client-secret"
+
 func sampleClient() repository.Client {
 	isActive := true
 	return repository.Client{
 		ID:               uuid.New(),
 		Name:             "test-client",
-		ClientSecretHash: "$2a$12$placeholder",
+		ClientSecretHash: hashSecret(sampleClientSecret),
 		RedirectUris:     []string{"https://example.com/callback"},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,
@@ -309,6 +313,28 @@ func TestHashSecret_MatchesPlain(t *testing.T) {
 	assert.NotContains(t, hash, "$2a$")
 	// Deterministic: same input always yields the same hash
 	assert.Equal(t, hash, hashSecret(plain))
+}
+
+// --- ValidateClientSecret ---
+
+func TestValidateClientSecret_Match(t *testing.T) {
+	plain := "super-secret-value"
+	stored := hashSecret(plain)
+	assert.True(t, ValidateClientSecret(stored, plain))
+}
+
+func TestValidateClientSecret_Mismatch(t *testing.T) {
+	stored := hashSecret("correct-secret")
+	assert.False(t, ValidateClientSecret(stored, "wrong-secret"))
+}
+
+func TestValidateClientSecret_RejectsBcryptHash(t *testing.T) {
+	// A bcrypt-formatted hash must never match any supplied secret because
+	// ValidateClientSecret only accepts SHA-256 hex digests (64 hex chars).
+	// This guards against accidentally accepting a legacy bcrypt-stored secret.
+	bcryptHash := "$2a$12$EXAMPLEhashThatLooksLikeBcryptButIsAPlaceholder"
+	assert.False(t, ValidateClientSecret(bcryptHash, "anypassword"))
+	assert.False(t, ValidateClientSecret(bcryptHash, bcryptHash))
 }
 
 // --- Validation errors ---

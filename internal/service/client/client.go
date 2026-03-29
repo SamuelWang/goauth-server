@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -271,6 +272,16 @@ func generateSecret() (string, error) {
 func hashSecret(plain string) string {
 	h := sha256.Sum256([]byte(plain))
 	return hex.EncodeToString(h[:])
+}
+
+// ValidateClientSecret reports whether the supplied plain-text secret matches
+// the stored SHA-256 hex hash. The comparison is constant-time to prevent
+// timing side-channels. A bcrypt-format hash (e.g. "$2a$...") will never
+// match because it is not a 64-character hex string.
+func ValidateClientSecret(storedHash, suppliedSecret string) bool {
+	h := sha256.Sum256([]byte(suppliedSecret))
+	supplied := hex.EncodeToString(h[:])
+	return subtle.ConstantTimeCompare([]byte(storedHash), []byte(supplied)) == 1
 }
 
 // toClient maps a repository Client record to the service model, stripping the secret hash.
