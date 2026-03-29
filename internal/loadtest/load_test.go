@@ -32,6 +32,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	authsvc "github.com/SamuelWang/goauth-server/internal/service/auth"
 	clientsvc "github.com/SamuelWang/goauth-server/internal/service/client"
 	providersvc "github.com/SamuelWang/goauth-server/internal/service/provider"
@@ -125,8 +126,10 @@ func newLoadEnv(t *testing.T) *loadEnv {
 	as, err := authsvc.New(mockQ, cfg, pSvc)
 	require.NoError(t, err)
 
+	auditSvc := audit.New(mockQ)
+
 	uSvc := usersvc.New(mockQ)
-	cSvc := clientsvc.New(mockQ, cfg.Server.Env)
+	cSvc := clientsvc.New(mockQ, cfg.Server.Env, auditSvc)
 	sSvc := sessionsvc.New(mockQ)
 
 	router := gin.New()
