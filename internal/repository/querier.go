@@ -53,6 +53,7 @@ type Querier interface {
 
 	// users
 	CountAdminUsers(ctx context.Context) (int64, error)
+	PromoteUserToAdmin(ctx context.Context, id uuid.UUID) (User, error)
 	CountUsers(ctx context.Context, arg CountUsersParams) (int64, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)

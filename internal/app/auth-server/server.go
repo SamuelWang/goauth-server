@@ -52,6 +52,16 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	clientService := client.New(repo, cfg.Server.Env, auditService)
 	sessionService := session.New(repo)
 
+	// Bootstrap default admin and client from environment configuration.
+	// These calls are idempotent and skip gracefully when credentials are not
+	// configured or when the resources already exist.
+	if err := BootstrapDefaultAdmin(context.Background(), cfg.Bootstrap, cfg.Server, repo, auditService); err != nil {
+		return nil, fmt.Errorf("bootstrap default admin: %w", err)
+	}
+	if err := BootstrapDefaultClient(context.Background(), cfg.Bootstrap, cfg.Server, repo, auditService); err != nil {
+		return nil, fmt.Errorf("bootstrap default client: %w", err)
+	}
+
 	// Set Gin mode
 	if cfg.Server.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)

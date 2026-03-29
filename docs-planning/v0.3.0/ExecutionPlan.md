@@ -462,8 +462,8 @@ func BootstrapDefaultClient(ctx context.Context, cfg config.BootstrapConfig, ser
 Both functions return `nil` immediately (stubs); later sub-tasks fill in the logic.
 
 **Acceptance Criteria:**
-- [ ] File compiles with no errors
-- [ ] Function signatures match what `server.go` will call
+- [x] File compiles with no errors
+- [x] Function signatures match what `server.go` will call
 
 #### Sub-task 5.2 — Implement `BootstrapDefaultAdmin`
 
@@ -479,11 +479,11 @@ Fill in the function body:
 8. `log.Warn("Default admin account created — rotate credentials immediately", "email", cfg.DefaultAdminEmail)`.
 
 **Acceptance Criteria:**
-- [ ] Admin not created when `ENV=production` and `ALLOW_DEFAULT_ADMIN=false`
-- [ ] Admin not created when one already exists (`CountAdminUsers > 0`)
-- [ ] `force_password_change=true` in persisted record
-- [ ] Audit entry written without password value
-- [ ] Invalid email or weak password returns an error (does not create the user)
+- [x] Admin not created when `ENV=production` and `ALLOW_DEFAULT_ADMIN=false`
+- [x] Admin not created when one already exists (`CountAdminUsers > 0`)
+- [x] `force_password_change=true` in persisted record
+- [x] Audit entry written without password value
+- [x] Invalid email or weak password returns an error (does not create the user)
 
 #### Sub-task 5.3 — Implement `BootstrapDefaultClient`
 
@@ -499,10 +499,10 @@ Fill in the function body:
 8. `log.Warn("Default client created — rotate credentials immediately", "client_id", cfg.DefaultClientID)`.
 
 **Acceptance Criteria:**
-- [ ] Client not created when `ENV=production` and `ALLOW_DEFAULT_CLIENT=false`
-- [ ] Client not created when clients already exist
-- [ ] Plaintext secret never in logs or audit metadata
-- [ ] Invalid redirect URI returns a descriptive error
+- [x] Client not created when `ENV=production` and `ALLOW_DEFAULT_CLIENT=false`
+- [x] Client not created when clients already exist
+- [x] Plaintext secret never in logs or audit metadata
+- [x] Invalid redirect URI returns a descriptive error
 
 #### Sub-task 5.4 — Wire bootstrap into `server.go` startup sequence
 
@@ -520,8 +520,8 @@ if err := BootstrapDefaultClient(ctx, cfg.Bootstrap, cfg.Server, repo, auditSvc)
 Errors must propagate to `main()` which calls `log.Fatal` / `os.Exit(1)`.
 
 **Acceptance Criteria:**
-- [ ] Bootstrap functions called in the correct position in startup sequence
-- [ ] Startup aborts on non-nil error with a readable message
+- [x] Bootstrap functions called in the correct position in startup sequence
+- [x] Startup aborts on non-nil error with a readable message
 
 #### Sub-task 5.5 — Unit tests for bootstrap functions
 
@@ -540,8 +540,8 @@ Write `internal/app/auth-server/bootstrap_test.go` using the mock `Querier`:
 | Valid inputs, no existing clients | Creates client, writes audit, emits warn log |
 
 **Acceptance Criteria:**
-- [ ] All nine cases covered
-- [ ] `go test ./internal/app/auth-server/...` passes
+- [x] All nine cases covered
+- [x] `go test ./internal/app/auth-server/...` passes
 
 ### Task 6 — Account Lockout
 

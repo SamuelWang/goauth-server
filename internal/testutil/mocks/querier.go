@@ -266,6 +266,11 @@ func (m *MockQuerier) CountAdminUsers(ctx context.Context) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockQuerier) PromoteUserToAdmin(ctx context.Context, id uuid.UUID) (repository.User, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
 func (m *MockQuerier) GetUserByEmailForAuth(ctx context.Context, email string) (repository.User, error) {
 	args := m.Called(ctx, email)
 	return args.Get(0).(repository.User), args.Error(1)
