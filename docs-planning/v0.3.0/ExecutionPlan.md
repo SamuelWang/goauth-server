@@ -363,9 +363,9 @@ func (s *Service) LogEvent(ctx context.Context, entry AuditEntry) error
 `LogEvent` marshals `Metadata` to `[]byte` (JSON) and calls `s.repo.CreateAuditLogEntry(...)`. On error it logs at `WARN` level but does **not** panic — audit failures must never block the primary flow.
 
 **Acceptance Criteria:**
-- [ ] `LogEvent` does not return an error when the DB call succeeds
-- [ ] Non-nil DB errors are returned to caller (caller decides to log/ignore)
-- [ ] `Metadata` marshalling failure returns a wrapped error immediately without calling DB
+- [x] `LogEvent` does not return an error when the DB call succeeds
+- [x] Non-nil DB errors are returned to caller (caller decides to log/ignore)
+- [x] `Metadata` marshalling failure returns a wrapped error immediately without calling DB
 
 #### Sub-task 3.3 — Unit tests for the audit package
 
