@@ -376,8 +376,8 @@ Write `internal/service/audit/audit_test.go` using the mock `Querier`:
 - Empty `Metadata`: marshals to `{}` not `null`.
 
 **Acceptance Criteria:**
-- [ ] All four cases covered
-- [ ] `go test ./internal/service/audit/...` passes
+- [x] All four cases covered
+- [x] `go test ./internal/service/audit/...` passes
 
 ### Task 4 — Client Secret Hashing Migration (bcrypt → SHA-256)
 
