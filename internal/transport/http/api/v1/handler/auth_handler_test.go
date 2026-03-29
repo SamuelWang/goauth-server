@@ -1,6 +1,8 @@
 package handler_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ---------------------------------------------------------------------------
@@ -118,14 +119,14 @@ func TestListEnabledProviders_ExcludesSensitiveData(t *testing.T) {
 func buildActiveClientWithSecret(t *testing.T, redirectURI string) (repository.Client, string) {
 	t.Helper()
 	plainSecret := "my-plain-secret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainSecret), bcrypt.MinCost)
-	require.NoError(t, err)
+	h := sha256.Sum256([]byte(plainSecret))
+	hash := hex.EncodeToString(h[:])
 
 	isActive := true
 	cl := repository.Client{
 		ID:               uuid.New(),
 		Name:             "test-client",
-		ClientSecretHash: string(hash),
+		ClientSecretHash: hash,
 		RedirectUris:     []string{redirectURI},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,

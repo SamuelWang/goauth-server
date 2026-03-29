@@ -41,7 +41,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ---------------------------------------------------------------------------
@@ -820,7 +819,7 @@ func TestSecurity_ClientSecretHashNotExposedInList(t *testing.T) {
 	clientID := uuid.New()
 	cl := buildActiveClient(clientID, "my-client", adminID)
 	// Store a recognizable hash value to detect leakage.
-	cl.ClientSecretHash = "BCRYPT-HASH-MUST-NOT-APPEAR-IN-RESPONSE"
+	cl.ClientSecretHash = "SHA256-HASH-MUST-NOT-APPEAR-IN-RESPONSE"
 	isActive := true
 
 	env.mockQ.On("ListClients", mock.Anything, repository.ListClientsParams{
@@ -834,7 +833,7 @@ func TestSecurity_ClientSecretHashNotExposedInList(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	rawBody := w.Body.String()
-	assert.NotContains(t, rawBody, "BCRYPT-HASH-MUST-NOT-APPEAR-IN-RESPONSE")
+	assert.NotContains(t, rawBody, "SHA256-HASH-MUST-NOT-APPEAR-IN-RESPONSE")
 	assert.NotContains(t, rawBody, "client_secret_hash")
 }
 
@@ -1290,24 +1289,24 @@ func TestSecurity_MethodNotAllowed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 17. Bcrypt Timing Attack Mitigation (Inactive Client)
+// 17. Timing Attack Mitigation (Inactive Client)
 // ---------------------------------------------------------------------------
 
 // TestSecurity_InactiveClientRejected verifies that an inactive client is rejected
-// before bcrypt comparison to prevent timing differences from leaking client existence.
+// before SHA-256 comparison to prevent timing differences from leaking client existence.
 func TestSecurity_InactiveClientRejected(t *testing.T) {
 	env := newTestEnv(t)
 
 	redirectURI := "https://app.example.com/callback"
 	plainSecret := "my-secret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainSecret), bcrypt.MinCost)
-	require.NoError(t, err)
+	h := sha256.Sum256([]byte(plainSecret))
+	hash := hex.EncodeToString(h[:])
 
 	isActive := false
 	inactiveClient := repository.Client{
 		ID:               uuid.New(),
 		Name:             "inactive-client",
-		ClientSecretHash: string(hash),
+		ClientSecretHash: hash,
 		RedirectUris:     []string{redirectURI},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,

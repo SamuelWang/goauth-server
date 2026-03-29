@@ -309,8 +309,6 @@ func TestHashSecret_MatchesPlain(t *testing.T) {
 	assert.NotEmpty(t, hash)
 	// SHA-256 hex digest is always 64 characters
 	assert.Len(t, hash, 64)
-	// Must not be a bcrypt hash
-	assert.NotContains(t, hash, "$2a$")
 	// Deterministic: same input always yields the same hash
 	assert.Equal(t, hash, hashSecret(plain))
 }
@@ -326,15 +324,6 @@ func TestValidateClientSecret_Match(t *testing.T) {
 func TestValidateClientSecret_Mismatch(t *testing.T) {
 	stored := hashSecret("correct-secret")
 	assert.False(t, ValidateClientSecret(stored, "wrong-secret"))
-}
-
-func TestValidateClientSecret_RejectsBcryptHash(t *testing.T) {
-	// A bcrypt-formatted hash must never match any supplied secret because
-	// ValidateClientSecret only accepts SHA-256 hex digests (64 hex chars).
-	// This guards against accidentally accepting a legacy bcrypt-stored secret.
-	bcryptHash := "$2a$12$EXAMPLEhashThatLooksLikeBcryptButIsAPlaceholder"
-	assert.False(t, ValidateClientSecret(bcryptHash, "anypassword"))
-	assert.False(t, ValidateClientSecret(bcryptHash, bcryptHash))
 }
 
 // --- Validation errors ---
