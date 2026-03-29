@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -77,15 +78,17 @@ type ListClientsResult struct {
 
 // Service manages client applications.
 type Service struct {
-	repo repository.Querier
+	repo     repository.Querier
+	auditSvc *audit.Service
 	// env is consulted for redirect URI validation (e.g., "production" enforces HTTPS).
 	env string
 }
 
 // New creates a new client Service.
 // env should match config.Server.Env (e.g., "production", "development").
-func New(repo repository.Querier, env string) *Service {
-	return &Service{repo: repo, env: env}
+// auditSvc may be nil; if non-nil, audit events are written for sensitive operations.
+func New(repo repository.Querier, env string, auditSvc *audit.Service) *Service {
+	return &Service{repo: repo, env: env, auditSvc: auditSvc}
 }
 
 // ListClients returns a paginated list of clients filtered by active status.
@@ -225,6 +228,13 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating client secret: %w", err)
+	}
+
+	if s.auditSvc != nil {
+		_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{
+			EventType: audit.EventClientSecretRegenerated,
+			ClientID:  &updated.ID,
+		})
 	}
 
 	c := toClient(updated)

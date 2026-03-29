@@ -88,7 +88,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	providerSvc, err := provider.New(mockQ, encKey, cfg.Server.Env)
 	require.NoError(t, err)
 
-	clientSvc := client.New(mockQ, cfg.Server.Env)
+	clientSvc := client.New(mockQ, cfg.Server.Env, nil)
 	sessionSvc := session.New(mockQ)
 
 	router := gin.New()

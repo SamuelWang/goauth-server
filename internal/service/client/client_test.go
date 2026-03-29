@@ -14,11 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestService(q *mocks.MockQuerier) *Service {
-	return New(q, "development")
+	return New(q, "development", nil)
 }
 
 func sampleClient() repository.Client {
@@ -302,13 +301,14 @@ func TestGenerateSecret_IsBase64URL(t *testing.T) {
 
 func TestHashSecret_MatchesPlain(t *testing.T) {
 	plain := "my-secret"
-	hash, err := hashSecret(plain)
-	require.NoError(t, err)
+	hash := hashSecret(plain)
 	assert.NotEmpty(t, hash)
-	// Verify the hash actually matches the plain text
-	require.NoError(t, bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)))
-	// Basic structural check: bcrypt hashes start with "$2a$"
-	assert.Contains(t, hash, "$2a$")
+	// SHA-256 hex digest is always 64 characters
+	assert.Len(t, hash, 64)
+	// Must not be a bcrypt hash
+	assert.NotContains(t, hash, "$2a$")
+	// Deterministic: same input always yields the same hash
+	assert.Equal(t, hash, hashSecret(plain))
 }
 
 // --- Validation errors ---
@@ -353,7 +353,7 @@ func TestUpdateClient_ValidationErrors(t *testing.T) {
 
 func TestCreateClient_ValidationError_ProductionHTTPS(t *testing.T) {
 	q := &mocks.MockQuerier{}
-	svc := New(q, "production")
+	svc := New(q, "production", nil)
 	dto := CreateClientDTO{
 		Name:         "prod-app",
 		RedirectURIs: []string{"http://external.example.com/callback"}, // http in production (non-loopback)

@@ -406,8 +406,8 @@ Remove the `golang.org/x/crypto/bcrypt` import; add `crypto/sha256` and `encodin
 Apply the same SHA-256 hashing pattern in `RegenerateClientSecret`. After successful persistence, call `auditSvc.LogEvent(ctx, AuditEntry{EventType: EventClientSecretRegenerated, ClientID: &clientID})` — this requires injecting the `audit.Service` into the client `Service` struct.
 
 **Acceptance Criteria:**
-- [ ] Regenerated secret stored as SHA-256 hex hash
-- [ ] Audit event written on every successful regeneration
+- [x] Regenerated secret stored as SHA-256 hex hash
+- [x] Audit event written on every successful regeneration
 
 #### Sub-task 4.3 — Update `ValidateClientSecret`
 

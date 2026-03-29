@@ -10,6 +10,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	auditservice "github.com/SamuelWang/goauth-server/internal/service/audit"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
@@ -42,12 +43,13 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	}
 
 	// Initialize services
+	auditService := auditservice.New(repo)
 	authService, err := authservice.New(repo, cfg, providerSvc)
 	if err != nil {
 		return nil, fmt.Errorf("initializing auth service: %w", err)
 	}
 	userService := user.New(repo)
-	clientService := client.New(repo, cfg.Server.Env)
+	clientService := client.New(repo, cfg.Server.Env, auditService)
 	sessionService := session.New(repo)
 
 	// Set Gin mode
