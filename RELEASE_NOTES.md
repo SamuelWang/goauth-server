@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.3.0 — March 29, 2026
+
+### Breaking Changes
+
+- **Client secret hashing algorithm changed (bcrypt → SHA-256).** Client secrets are now stored as `hex(sha256(secret))` instead of bcrypt hashes. Existing client secrets hashed with bcrypt are **no longer valid** after upgrading to v0.3.0. After running the database migrations, all client application secrets must be regenerated using the `POST /api/v1/admin/clients/{id}/secret` endpoint. The new plaintext secret returned by that endpoint must be distributed to the corresponding client application before it can authenticate again.
+
+---
+
 ## v0.2.0 — March 12, 2026
 
 ### Overview

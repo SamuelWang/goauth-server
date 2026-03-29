@@ -442,8 +442,8 @@ Add a "Breaking Changes" entry to `RELEASE_NOTES.md` under the v0.3.0 section:
 - Instruct operators to regenerate all client secrets using `POST /api/v1/admin/clients/{id}/secret` after migration.
 
 **Acceptance Criteria:**
-- [ ] `RELEASE_NOTES.md` entry present and accurate
-- [ ] Entry references the `RegenerateClientSecret` endpoint
+- [x] `RELEASE_NOTES.md` entry present and accurate
+- [x] Entry references the `RegenerateClientSecret` endpoint
 
 ### Task 5 — Default Admin & Client Bootstrap
 
