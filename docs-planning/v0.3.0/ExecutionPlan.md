@@ -398,8 +398,8 @@ hashedSecret := hex.EncodeToString(h[:])
 Remove the `golang.org/x/crypto/bcrypt` import; add `crypto/sha256` and `encoding/hex` (both stdlib).
 
 **Acceptance Criteria:**
-- [ ] `CreateClient` persists `hex(sha256(secret))` in the database
-- [ ] No bcrypt import remains in the file
+- [x] `CreateClient` persists `hex(sha256(secret))` in the database
+- [x] No bcrypt import remains in the file
 
 #### Sub-task 4.2 — Replace hashing in `RegenerateClientSecret`
 

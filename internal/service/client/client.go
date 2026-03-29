@@ -3,7 +3,9 @@ package client
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -12,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Client is the service-level representation of a client application.
@@ -135,7 +136,7 @@ func (s *Service) GetClient(ctx context.Context, id uuid.UUID) (*Client, error) 
 }
 
 // CreateClient creates a new client application. It generates a cryptographically
-// secure random secret, hashes it with bcrypt (cost 12), and stores only the hash.
+// secure random secret, hashes it with SHA-256, and stores only the hash.
 // The plain secret is returned once in ClientWithSecret and must be conveyed to
 // the administrator immediately — it cannot be recovered afterwards.
 func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUserID uuid.UUID) (*ClientWithSecret, error) {
@@ -148,10 +149,7 @@ func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUs
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash, err := hashSecret(plainSecret)
-	if err != nil {
-		return nil, fmt.Errorf("hashing client secret: %w", err)
-	}
+	hash := hashSecret(plainSecret)
 
 	isActive := dto.IsActive
 	row, err := s.repo.CreateClient(ctx, repository.CreateClientParams{
@@ -219,10 +217,7 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash, err := hashSecret(plainSecret)
-	if err != nil {
-		return nil, fmt.Errorf("hashing client secret: %w", err)
-	}
+	hash := hashSecret(plainSecret)
 
 	updated, err := s.repo.RegenerateClientSecret(ctx, repository.RegenerateClientSecretParams{
 		ID:               existing.ID,
@@ -262,13 +257,10 @@ func generateSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// hashSecret hashes a plain-text secret using bcrypt with cost 12.
-func hashSecret(plain string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), 12)
-	if err != nil {
-		return "", fmt.Errorf("bcrypt: %w", err)
-	}
-	return string(hash), nil
+// hashSecret hashes a plain-text secret using SHA-256, returning the hex-encoded digest.
+func hashSecret(plain string) string {
+	h := sha256.Sum256([]byte(plain))
+	return hex.EncodeToString(h[:])
 }
 
 // toClient maps a repository Client record to the service model, stripping the secret hash.
