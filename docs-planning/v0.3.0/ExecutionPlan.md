@@ -337,8 +337,8 @@ const (
 ```
 
 **Acceptance Criteria:**
-- [ ] All 15 constants defined using the exact string values from System Design
-- [ ] File compiles with no imports needed (pure type definitions)
+- [x] All 15 constants defined using the exact string values from System Design
+- [x] File compiles with no imports needed (pure type definitions)
 
 #### Sub-task 3.2 — Create `internal/service/audit/audit.go`
 
