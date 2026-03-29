@@ -422,8 +422,8 @@ return subtle.ConstantTimeCompare([]byte(storedHash), []byte(supplied)) == 1
 Import `crypto/subtle` (stdlib).
 
 **Acceptance Criteria:**
-- [ ] Comparison is constant-time (no early exit on first differing byte)
-- [ ] Returns `false` for a mismatched secret; `true` for a matching one
+- [x] Comparison is constant-time (no early exit on first differing byte)
+- [x] Returns `false` for a mismatched secret; `true` for a matching one
 
 #### Sub-task 4.4 — Update existing client service unit tests
 

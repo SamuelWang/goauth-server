@@ -7,13 +7,16 @@ import (
 	"slices"
 	"time"
 
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
+
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 )
 
@@ -195,7 +198,9 @@ func (s *Service) ExchangeCodeForToken(
 	if client.IsActive == nil || !*client.IsActive {
 		return nil, ErrClientInactive
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecretHash), []byte(clientSecret)); err != nil {
+	h := sha256.Sum256([]byte(clientSecret))
+	supplied := hex.EncodeToString(h[:])
+	if subtle.ConstantTimeCompare([]byte(client.ClientSecretHash), []byte(supplied)) != 1 {
 		return nil, ErrInvalidClientSecret
 	}
 
