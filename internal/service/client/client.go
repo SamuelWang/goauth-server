@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
@@ -147,7 +145,7 @@ func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUs
 		return nil, err
 	}
 
-	plainSecret, err := generateSecret()
+	plainSecret, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
@@ -215,7 +213,7 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 		return nil, fmt.Errorf("getting client: %w", err)
 	}
 
-	plainSecret, err := generateSecret()
+	plainSecret, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
@@ -256,15 +254,6 @@ func (s *Service) DeleteClient(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("deleting client: %w", err)
 	}
 	return nil
-}
-
-// generateSecret returns a URL-safe base64-encoded 32-byte random secret.
-func generateSecret() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("reading random bytes: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // ValidateClientSecret reports whether the supplied plain-text secret matches

@@ -298,7 +298,7 @@ func TestDeleteClient_NotFound(t *testing.T) {
 // --- Secret generation ---
 
 func TestGenerateSecret_IsBase64URL(t *testing.T) {
-	secret, err := generateSecret()
+	secret, err := util.GenerateSecureToken(32)
 	require.NoError(t, err)
 	// 32 bytes base64url-encoded without padding = 43 chars
 	assert.Len(t, secret, 43)

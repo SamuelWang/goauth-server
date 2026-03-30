@@ -2,9 +2,7 @@ package auth
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -54,16 +52,6 @@ func (s *Service) ValidateAccessToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
-}
-
-// generateAuthCode returns a cryptographically secure, URL-safe authorization code
-// (43 characters of base64url-encoded random bytes).
-func generateAuthCode() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generating random bytes: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func parsePrivateKey(privateKeyPEM string) (*ecdsa.PrivateKey, error) {

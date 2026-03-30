@@ -154,7 +154,7 @@ func (s *Service) HandleProviderCallback(
 	}
 
 	// 6. Generate a short-lived authorization code.
-	authCode, err := generateAuthCode()
+	authCode, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return "", fmt.Errorf("generating authorization code: %w", err)
 	}
