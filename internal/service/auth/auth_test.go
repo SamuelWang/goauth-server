@@ -71,7 +71,7 @@ func newTestService(t *testing.T, q *mocks.MockQuerier, psvc *mockProviderServic
 		},
 	}
 
-	svc, err := New(q, cfg, psvc)
+	svc, err := New(q, cfg, psvc, nil)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 
@@ -482,7 +482,11 @@ func TestRevokeRawToken_NotFound(t *testing.T) {
 
 // ---- IsTokenRevoked ----
 
-func TestIsTokenRevoked_NotInDB_ReturnsRevoked(t *testing.T) {
+// TestIsTokenRevoked_NotInDB_ReturnsNotRevoked verifies that tokens absent from
+// the access_tokens table are treated as NOT revoked. Direct-login tokens
+// (v0.3.0+) are not persisted; their validity is enforced by JWT
+// signature and expiry only.
+func TestIsTokenRevoked_NotInDB_ReturnsNotRevoked(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
@@ -493,7 +497,7 @@ func TestIsTokenRevoked_NotInDB_ReturnsRevoked(t *testing.T) {
 	svc := newTestService(t, q, psvc)
 	revoked, err := svc.IsTokenRevoked(context.Background(), rawToken)
 	require.NoError(t, err)
-	assert.True(t, revoked, "token not in DB should be treated as revoked")
+	assert.False(t, revoked, "token not in DB should not be treated as revoked")
 	q.AssertExpectations(t)
 }
 
@@ -690,7 +694,7 @@ func TestNew_Constructor(t *testing.T) {
 		},
 	}
 
-	svc, err := New(q, cfg, psvc)
+	svc, err := New(q, cfg, psvc, nil)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 }

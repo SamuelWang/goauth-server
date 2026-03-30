@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
@@ -19,15 +20,17 @@ type ApiV1Handler struct {
 	providerService *provider.Service
 	clientService   *client.Service
 	sessionService  *session.Service
+	auditSvc        *audit.Service
 }
 
-func New(authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service) *ApiV1Handler {
+func New(authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service, auditSvc *audit.Service) *ApiV1Handler {
 	return &ApiV1Handler{
 		authService:     authService,
 		userService:     userService,
 		providerService: providerService,
 		clientService:   clientService,
 		sessionService:  sessionService,
+		auditSvc:        auditSvc,
 	}
 }
 

@@ -44,7 +44,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 
 	// Initialize services
 	auditService := auditservice.New(repo)
-	authService, err := authservice.New(repo, cfg, providerSvc)
+	authService, err := authservice.New(repo, cfg, providerSvc, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("initializing auth service: %w", err)
 	}
@@ -88,7 +88,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	r.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))
 
 	// Register routes
-	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService)
+	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService, auditService)
 	web.RegisterRoutes(r, cfg, authService)
 	ops.RegisterRoutes(r)
 

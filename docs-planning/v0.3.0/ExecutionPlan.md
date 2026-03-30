@@ -569,8 +569,8 @@ var ErrInvalidCredentials = errors.New("invalid credentials")
 ```
 
 **Acceptance Criteria:**
-- [ ] Function signature compiles
-- [ ] Sentinel errors declared at package level
+- [x] Function signature compiles
+- [x] Sentinel errors declared at package level
 
 #### Sub-task 6.2 — Implement lockout check
 
@@ -581,8 +581,8 @@ Inside `VerifyCredentials`:
 3. If `user.LockedUntil != nil` AND it is in the past → `s.repo.ResetLoginAttempts(ctx, user.ID)` to clear stale lockout, then continue.
 
 **Acceptance Criteria:**
-- [ ] Active lockout returns `ErrAccountLocked` immediately without password check
-- [ ] Expired lockout is cleared before proceeding
+- [x] Active lockout returns `ErrAccountLocked` immediately without password check
+- [x] Expired lockout is cleared before proceeding
 
 #### Sub-task 6.3 — Implement password verification and failed-attempt tracking
 
@@ -602,10 +602,10 @@ Continuing in `VerifyCredentials` after the lockout check:
 5. On success: `s.repo.ResetLoginAttempts(ctx, user.ID)`, `s.repo.UpdateLastLogin(ctx, user.ID)`. Return result with `User` populated.
 
 **Acceptance Criteria:**
-- [ ] `failed_login_attempts` incremented on each failure
-- [ ] `account_locked` audit event written exactly once (at transition), not on every failure
-- [ ] `login_failed` audit event written on each non-locking failure
-- [ ] Successful login resets attempt counter
+- [x] `failed_login_attempts` incremented on each failure
+- [x] `account_locked` audit event written exactly once (at transition), not on every failure
+- [x] `login_failed` audit event written on each non-locking failure
+- [x] Successful login resets attempt counter
 
 #### Sub-task 6.4 — Create `POST /api/v1/auth/login` handler and route
 
@@ -635,12 +635,12 @@ publicAuth.POST("/login", middleware.RateLimitByIP(middleware.LoginRatePerMin, m
 ```
 
 **Acceptance Criteria:**
-- [ ] Route `POST /api/v1/auth/login` is newly created and reachable (does not exist in v0.2.0)
-- [ ] `400` returned for malformed or missing email
-- [ ] `429` response includes `Retry-After` header with correct UTC timestamp
-- [ ] `401` response does not distinguish wrong password from unknown email
-- [ ] Source IP extracted and passed through correctly
-- [ ] Rate limiting applied (reuse existing `LoginRatePerMin` constant or define one)
+- [x] Route `POST /api/v1/auth/login` is newly created and reachable (does not exist in v0.2.0)
+- [x] `400` returned for malformed or missing email
+- [x] `429` response includes `Retry-After` header with correct UTC timestamp
+- [x] `401` response does not distinguish wrong password from unknown email
+- [x] Source IP extracted and passed through correctly
+- [x] Rate limiting applied (reuse existing `LoginRatePerMin` constant or define one)
 
 #### Sub-task 6.5 — Implement admin unlock handler
 
@@ -657,17 +657,17 @@ DELETE /api/v1/admin/users/:id/lockout
 - Return `204 No Content`.
 
 **Acceptance Criteria:**
-- [ ] Non-admin JWT returns `403`
-- [ ] Unknown user ID returns `404`
-- [ ] Valid request clears `locked_until` and writes `account_unlocked` audit entry
+- [x] Non-admin JWT returns `403`
+- [x] Unknown user ID returns `404`
+- [x] Valid request clears `locked_until` and writes `account_unlocked` audit entry
 
 #### Sub-task 6.6 — Register new admin route
 
 In `internal/transport/http/api/router.go` (or wherever admin routes are registered), add the `DELETE /api/v1/admin/users/:id/lockout` route pointing to the new handler.
 
 **Acceptance Criteria:**
-- [ ] Route registered and reachable
-- [ ] Existing admin routes unaffected
+- [x] Route registered and reachable
+- [x] Existing admin routes unaffected
 
 ### Task 7 — Force Password Change
 

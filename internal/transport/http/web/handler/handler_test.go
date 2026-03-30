@@ -91,7 +91,7 @@ func newWebEnv(t *testing.T) *webEnv {
 	mockQ := &mocks.MockQuerier{}
 	provSvc := &stubProvSvc{}
 
-	authSvc, err := auth.New(mockQ, cfg, provSvc)
+	authSvc, err := auth.New(mockQ, cfg, provSvc, nil)
 	require.NoError(t, err)
 
 	sigKey := make([]byte, 32)

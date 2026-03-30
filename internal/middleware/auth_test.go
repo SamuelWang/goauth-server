@@ -64,7 +64,7 @@ func newTestAuthHelper(t *testing.T, q *mocks.MockQuerier) *testAuthHelper {
 		},
 	}
 
-	svc, err := auth.New(q, cfg, nil)
+	svc, err := auth.New(q, cfg, nil, nil)
 	require.NoError(t, err)
 
 	return &testAuthHelper{service: svc, privKey: privKey}
@@ -222,7 +222,9 @@ func TestAuthMiddleware_TokenNotFoundInDB(t *testing.T) {
 	router := setupTestRouter()
 
 	validToken := h.generateValidToken(t)
-	// Token not present in DB → treated as invalid/revoked.
+	// Token not present in DB → treated as NOT revoked.
+	// Direct-login tokens (v0.3.0+) are not persisted in access_tokens;
+	// their validity is enforced solely by the JWT signature and expiry claim.
 	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(repository.AccessToken{}, pgx.ErrNoRows)
 
@@ -237,9 +239,8 @@ func TestAuthMiddleware_TokenNotFoundInDB(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Contains(t, w.Body.String(), "revoked")
-	assert.False(t, handlerCalled)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled)
 	mockQ.AssertExpectations(t)
 }
 

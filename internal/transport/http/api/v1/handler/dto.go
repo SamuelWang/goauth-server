@@ -219,3 +219,18 @@ type ListAccessTokensResponse struct {
 	Tokens []AccessTokenResponse `json:"tokens"`
 	Total  int64                 `json:"total"`
 }
+
+// --- Direct login ---
+
+// LoginRequest is the request body for POST /api/v1/auth/login.
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// LoginResponse is returned on a successful direct login.
+type LoginResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+}

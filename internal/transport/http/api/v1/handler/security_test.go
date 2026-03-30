@@ -231,16 +231,21 @@ func TestSecurity_RevokedTokenRejected(t *testing.T) {
 }
 
 // TestSecurity_TokenNotFoundInDB verifies that a well-formed JWT whose hash is not
-// in the database (e.g. never issued, or already cleaned up) is rejected.
+// in the database is accepted — tokens not in DB are treated as not-revoked
+// (direct-login tokens issued in v0.3.0+ are not persisted to access_tokens).
 func TestSecurity_TokenNotFoundInDB(t *testing.T) {
 	env := newTestEnv(t)
 	userID := uuid.New()
 	token := env.generateToken(t, userID.String(), "user@example.com")
 
 	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(repository.AccessToken{}, pgx.ErrNoRows)
+	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(repository.User{
+		ID:    userID,
+		Email: "user@example.com",
+	}, nil)
 
 	w := env.doRequestWithRawToken(http.MethodGet, "/api/v1/auth/me", nil, token)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // TestSecurity_MalformedBearerToken verifies that malformed Authorization headers

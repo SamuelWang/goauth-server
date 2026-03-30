@@ -74,7 +74,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	mockQ := &mocks.MockQuerier{}
 
-	authSvc, err := auth.New(mockQ, cfg, nil)
+	authSvc, err := auth.New(mockQ, cfg, nil, nil)
 	require.NoError(t, err)
 
 	userSvc := user.New(mockQ)
@@ -95,7 +95,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	router.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))
 	apiV1 := router.Group("/api/v1")
 	apiV1.Use(middleware.ContextMiddleware(cfg))
-	v1.RegisterRoutes(apiV1, authSvc, userSvc, providerSvc, clientSvc, sessionSvc)
+	v1.RegisterRoutes(apiV1, authSvc, userSvc, providerSvc, clientSvc, sessionSvc, nil)
 
 	return &testEnv{
 		mockQ:       mockQ,
