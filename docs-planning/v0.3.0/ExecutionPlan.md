@@ -31,7 +31,8 @@ T1 (DB Schema)
        │    ├─ T6 (Account Lockout)
        │    ├─ T7 (Force PW Change)
        │    └─ T8 (Refresh Tokens)
-       └─────────────────────────────── T9 (Tests)
+       ├─────────────────────────────── T9 (Tests)
+       └─────────────────────────────── T10 (Documentation)  ← depends on T1–T9
 ```
 
 ## 2. Tasks
@@ -1089,6 +1090,211 @@ Fix any data races or failures. Confirm coverage targets.
 - [ ] Coverage ≥ 80% for all new packages (`audit`, `refresh`, `bootstrap`, `password`)
 - [ ] No pre-existing tests regressed
 
+### Task 10 — Documentation
+
+**Dependencies:** T1–T9 (all implementation tasks)  
+**Blocks:** Release
+
+All four documents under `docs/` must be revised to reflect v0.3.0 additions. Each document is updated in-place; a new `v0.3.0` version header replaces the previous one. No separate version-archive file is created — the docs directory always reflects the current released version.
+
+#### Sub-task 10.1 — Update `docs/AdministratorGuide.md`
+
+Revise the Administrator Guide from v0.2.0 to v0.3.0:
+
+1. **Document header:** Bump version to `0.3.0`, update creation date.
+2. **Table of Contents:** Add sections for Bootstrap Configuration (§2.3), Lockout Configuration (§2.4), Account Lockout Management (§6.3), Refresh Token Session Management (§7.5, §7.6), and Audit Log (§7.7).
+3. **Environment Variables table (§2.2):** Add all 15 new variables introduced in T2 — Bootstrap (`ALLOW_DEFAULT_ADMIN`, `DEFAULT_ADMIN_EMAIL`, etc.), Lockout (`LOGIN_MAX_ATTEMPTS`, `LOGIN_ATTEMPT_WINDOW_SECONDS`, `LOGIN_LOCKOUT_DURATION_SECONDS`), and Refresh Token (`REFRESH_TOKEN_EXPIRY_DAYS`, `REFRESH_TOKEN_ROTATION_ENABLED`, `REFRESH_TOKEN_MAX_LIFETIME_DAYS`) — in their respective grouped sections.
+4. **Bootstrap Configuration section (§2.3):** Document the automatic first-run admin and client creation mechanism. Explain production guard (`ALLOW_DEFAULT_ADMIN`, `ALLOW_DEFAULT_CLIENT`), when it is safe to use, and the mandatory post-bootstrap rotation procedure.
+5. **Replace §3 (Creating the First Admin User):** The manual SQL bootstrap procedure from v0.2.0 is superseded by the automatic bootstrap (T5). Retain the manual SQL approach as a fallback / advanced procedure, and add §3.1 covering the automated bootstrap path.
+6. **Client Management (§4):** Update `CreateClient` and `UpdateClient` request/response examples to include `is_confidential` and `allow_refresh_tokens` fields. Update the `RegenerateClientSecret` note to reflect SHA-256 (not bcrypt) hashing.
+7. **User Management (§6):** Add §6.3 describing account lockout status in user list responses and how `locked_until` appears. Add §6.4 for the admin unlock endpoint (`DELETE /api/v1/admin/users/:id/lockout`) with request, response, and `Retry-After` example.
+8. **Session Management (§7):** Add §7.5 for listing refresh tokens (`GET /api/v1/sessions/refresh-tokens`) and §7.6 for revoking a single refresh token by record ID (`DELETE /api/v1/sessions/refresh-tokens/:id`). Add §7.7 documenting the Audit Log endpoint (`GET /api/v1/audit-log`) including all 14 event types in a table, filter parameters, and a response example.
+9. **Security Best Practices (§8):** Add guidance on default credential handling (rotate immediately, never leave bootstrap variables set in production), refresh token security (short expiry, rotation policy, family revocation), and the new password complexity policy.
+10. **Production Checklist (§8):** Add checklist items for `ALLOW_DEFAULT_ADMIN=false`, `ALLOW_DEFAULT_CLIENT=false`, and confirming all client secrets have been regenerated after the bcrypt → SHA-256 migration.
+11. **Troubleshooting (§9):** Add entries for lockout-related `429` responses, bootstrap startup failures (invalid email, weak password, invalid redirect URI), and `invalid_grant` on refresh token rotation.
+
+**Acceptance Criteria:**
+- [ ] All 15 new environment variables documented in the correct section
+- [ ] Bootstrap procedure clearly distinguishes dev/staging vs. production usage
+- [ ] Admin unlock endpoint fully documented with example
+- [ ] All 14 audit event types listed in the Audit Log section
+- [ ] SHA-256 migration notice present in the client secret section
+- [ ] Document version header reads `0.3.0`
+
+#### Sub-task 10.2 — Update `docs/ClientIntegrationGuide.md`
+
+Revise the Client Integration Guide from v0.2.0 to v0.3.0:
+
+1. **Document header:** Bump version to `0.3.0`, update creation date.
+2. **Table of Contents:** Add §7 (Email & Password Login), §8 (Force Password Change), §9 (Refresh Tokens & Token Revocation), and renumber the subsequent sections.
+3. **Authorization Code Flow — Step 4 (Token Exchange):** Update the success response example to include `refresh_token` (when `offline_access` scope is granted and the client has `allow_refresh_tokens=true`). Document the new `scope` field containing `offline_access`.
+4. **New §7 — Email & Password Login:** Document `POST /api/v1/auth/login`. Include:
+   - Request format (JSON with `email` and `password`).
+   - Normal success response (access token; with refresh token when `offline_access` applies).
+   - Force-password-change response (`challenge_token`, `require: "password_change"`).
+   - Error responses: `400` (malformed email), `401` (invalid credentials — generic message), `429` (account locked with `Retry-After` header).
+   - The full password complexity policy table (minimum length, character classes, deny-list, no email substring).
+   - Note on account lockout: thresholds, lockout duration, and that the `Retry-After` value is an HTTP-date.
+5. **New §8 — Force Password Change:** Document `POST /api/v1/auth/change-password`. Include:
+   - When it is required (bootstrap-created accounts, admin-set flag).
+   - Request format (`challenge_token`, `new_password`).
+   - Success response (full access token).
+   - Error codes: `400` invalid token, `400` weak password, `409` flag already cleared.
+   - Challenge token lifetime (15 minutes) and single-use semantics.
+6. **New §9 — Refresh Tokens & Token Revocation:** Document:
+   - How to request a refresh token (include `offline_access` in scope; client must have `allow_refresh_tokens=true`).
+   - `grant_type=refresh_token` exchange (`POST /api/v1/auth/token`).
+   - Rotation behaviour (each use invalidates the old token and returns a new one).
+   - Replay detection: what happens when a rotated token is reused (family revocation) and how to handle the `400 invalid_grant` response.
+   - RFC 7009 revocation (`POST /api/v1/auth/revoke`): request format, authentication options (HTTP Basic or Bearer), response behaviour (always 200), and when to call it (logout, password change, suspicious activity).
+   - Refresh token storage guidance: treat like a password; store in `HttpOnly` cookie or a server-side session; never in `localStorage`.
+7. **Security Considerations (renumbered):** Add a dedicated subsection on refresh token security (short absolute lifetime, rotate on use, revoke on password change, detect replay). Update the "Token Expiry and Refresh" note to document that v0.3.0 introduces refresh tokens under `offline_access`.
+8. **Code Examples (renumbered):** Extend the TypeScript/JavaScript and Python examples to show:
+   - Requesting `offline_access` scope in the authorization URL.
+   - Storing and refreshing access tokens using the refresh grant.
+   - Revoking a refresh token on logout.
+   - Handling `force_password_change` at login (detect challenge token, prompt user to set new password, call change-password endpoint).
+9. **Error Handling:** Add `grant_type=refresh_token` error codes (`invalid_grant` for expired/revoked/replayed tokens, `invalid_client` for client mismatch) to the error table.
+
+**Acceptance Criteria:**
+- [ ] `POST /api/v1/auth/login` fully documented with all response variants
+- [ ] Password complexity policy table present and matches SRS
+- [ ] Refresh token grant documented end-to-end
+- [ ] Replay detection behaviour explained
+- [ ] `POST /api/v1/auth/revoke` documented with all authentication options
+- [ ] Code examples updated for at least TypeScript and Python
+- [ ] Document version header reads `0.3.0`
+
+#### Sub-task 10.3 — Update `docs/DatabaseDocumentation.md`
+
+Revise the Database Documentation from v0.2.0 to v0.3.0:
+
+1. **Document header:** Bump version, update date.
+2. **Table of Contents:** Add `refresh_tokens` and `audit_log` table sections; add new migration entries.
+3. **Entity Relationship Diagram:** Extend the `mermaid` ERD to include `refresh_tokens` (with FKs to `clients`, `users`, `access_tokens`, and self-referential `previous_token_id`) and `audit_log` (with optional FKs to `users` and `clients`). Update `users` to show the five new columns. Update `clients` to show `is_confidential` and `allow_refresh_tokens`.
+4. **`users` table section:** Add the five new columns (`password_hash`, `force_password_change`, `failed_login_attempts`, `last_failed_login_at`, `locked_until`) with types, constraints, and descriptions. Add `idx_users_locked_until` to the indexes list.
+5. **`clients` table section:** Add `is_confidential` and `allow_refresh_tokens` with their defaults and descriptions.
+6. **New `refresh_tokens` table section:** Document all 15 columns, 4 foreign keys, and 6 indexes. Include a note on the token family model and replay detection.
+7. **New `audit_log` table section:** Document all 8 columns and 4 indexes. Note that the table is append-only (no `updated_at` trigger) and that it never contains secrets or raw token values.
+8. **Migration History table:** Append all four new migrations with their order, name, and description.
+9. **Queries section:** Add subsections for `refresh_tokens.sql` (9 queries) and `audit_log.sql` (3 queries). Update `users.sql` and `clients.sql` subsections to document new queries.
+
+**Acceptance Criteria:**
+- [ ] ERD reflects all new tables and columns
+- [ ] All new columns fully documented with types and constraints
+- [ ] All four new migrations in the Migration History table
+- [ ] `refresh_tokens` and `audit_log` query lists match the implemented SQL files
+
+#### Sub-task 10.4 — Update `docs/ServiceLayerDocumentation.md`
+
+Revise the Service Layer Documentation from v0.2.0 to v0.3.0:
+
+1. **Document header:** Bump version, update date.
+2. **Table of Contents:** Add sections for `audit.Service` (§4), updated `auth.Service` (§3 with new methods), and updated `client.Service` (§5 — SHA-256 hashing note).
+3. **Architecture diagram:** Extend the ASCII diagram to show `audit.Service` as a shared dependency wired into `auth.Service`, `client.Service`, and the bootstrap hook.
+4. **Auth Service (§3):**
+   - Add `VerifyCredentials` method: signature, description of lockout check, password verification, attempt tracking, and sentinel errors (`ErrAccountLocked`, `ErrInvalidCredentials`).
+   - Add `GenerateChallengeToken` / `ValidateChallengeToken`: purpose, claims (`typ=password_change`, 15-minute expiry), and single-use semantics.
+   - Add `RotateRefreshToken`: inputs, rotation logic, replay detection path, sentinel errors (`ErrInvalidGrant`, `ErrTokenExpired`).
+   - Update `ExchangeAuthorizationCode`: note that it now optionally returns a refresh token when `offline_access` + `allow_refresh_tokens` conditions are met.
+   - Update `TokenResponse` struct to include the new `RefreshToken` field.
+5. **New Audit Service (§4):** Document `audit.Service`, `AuditEntry` struct, `EventType` constants (all 15 values), and `LogEvent` signature. Note the non-blocking error policy (audit failures never panic; caller receives the error but the primary flow continues).
+6. **Client Service (§5):** Update `ValidateClientSecret` to document SHA-256 constant-time comparison. Update `CreateClient` and `RegenerateClientSecret` to note audit event emission and SHA-256 hashing. Add `is_confidential` and `allow_refresh_tokens` to the `CreateClientParams` and `UpdateClientParams` type tables.
+7. **Testing (§8):** Add a note that `audit.Service` tests use the mock `Querier`, and that the mock was extended in T1.10 to cover all new query methods.
+
+**Acceptance Criteria:**
+- [ ] All new `auth.Service` methods documented with signatures and behaviour
+- [ ] Audit package fully documented including all 15 event type constants
+- [ ] Client secret hashing change clearly noted with the new comparison approach
+- [ ] Architecture diagram updated to include `audit.Service`
+
+#### Sub-task 10.5 — Create `docs/FrontendIntegrationGuide.md`
+
+Create a new Frontend Integration Guide targeted at web and mobile frontend developers integrating with the Goauth Server. This document covers all flows a frontend client would interact with directly.
+
+1. **Document header:** Version `0.3.0`, creation date March 30, 2026, audience "Frontend / SPA / Mobile Developers".
+2. **Table of Contents:**
+   - §1 Overview & Prerequisites
+   - §2 Authentication Flows
+   - §3 Email & Password Login
+   - §4 Force Password Change
+   - §5 Token Management
+   - §6 Refresh Tokens
+   - §7 Token Revocation & Logout
+   - §8 Error Handling Reference
+   - §9 Security Best Practices
+   - §10 Complete Code Examples
+3. **§1 — Overview & Prerequisites:** Describe the server's role (OAuth 2.0 + custom login endpoint), list prerequisites (registered OAuth client, `client_id`, redirect URIs), and explain the two primary auth paths (OAuth Authorization Code Flow vs. direct Email/Password Login).
+4. **§2 — Authentication Flows:** Provide a decision diagram (Mermaid `flowchart TD`) illustrating when to use the Authorization Code Flow vs. the direct login endpoint. Describe the `offline_access` scope and when a refresh token is returned.
+5. **§3 — Email & Password Login:** Document `POST /api/v1/auth/login` from a frontend perspective:
+   - Request format and example (`fetch`/`axios`).
+   - Normal success response: how to extract and store the access token.
+   - `force_password_change` response: detect the `challenge_token` field and redirect user to a password-change screen.
+   - `401 invalid_credentials`: display a generic "Invalid email or password" message; never expose whether the account exists.
+   - `429 account_locked`: read the `Retry-After` header, display a human-readable countdown, and disable the login form until the lockout expires.
+   - `400` validation errors: display field-level feedback.
+6. **§4 — Force Password Change:** Document `POST /api/v1/auth/change-password` from a frontend perspective:
+   - UI flow: receive `challenge_token` from §3, display a dedicated "Set New Password" screen.
+   - Password complexity rules displayed as a checklist (minimum length 12, uppercase, lowercase, digit, special character, not in common-passwords list, does not contain email).
+   - Request format and example.
+   - `400` invalid token (expired / malformed): redirect back to login.
+   - `409` already cleared: redirect to normal login.
+   - `400` weak password: show per-rule feedback inline.
+   - On success: store the returned access token and proceed as a normal authenticated session.
+7. **§5 — Token Management:** Explain access token storage and usage:
+   - Recommended storage: `HttpOnly` cookie (server-side rendered apps) or in-memory variable (SPAs). Warn against `localStorage` / `sessionStorage`.
+   - How to attach the token to API requests (`Authorization: Bearer <token>`).
+   - Token expiry: how to detect a `401` on an API call and trigger a silent refresh (§6) before re-attempting.
+   - `exp` claim: optionally decode the JWT locally to proactively refresh before expiry.
+8. **§6 — Refresh Tokens:** Document the refresh token lifecycle from a frontend perspective:
+   - How to receive a refresh token (requires `offline_access` scope and `allow_refresh_tokens=true` on the client).
+   - Storage: `HttpOnly` cookie only; never `localStorage`.
+   - `grant_type=refresh_token` request to `POST /api/v1/auth/token`: form-encoded parameters, example.
+   - Rotate-on-use behaviour: always store the new refresh token from the response; discard the old one.
+   - Handling `400 invalid_grant` (expired or replayed token): clear all stored tokens and redirect to login.
+   - Silent refresh pattern: singleton promise to prevent concurrent refresh races.
+9. **§7 — Token Revocation & Logout:** Document the logout flow:
+   - Call `POST /api/v1/auth/revoke` with the refresh token before clearing local state.
+   - `token_type_hint=refresh_token` in the request body.
+   - Always returns `200` — treat any network error as a soft failure; still clear local tokens.
+   - Clear access token from memory and refresh token cookie.
+   - Redirect to login or landing page.
+10. **§8 — Error Handling Reference:** Provide a lookup table of all HTTP status codes the frontend may receive from auth endpoints, the `error` JSON field values, and recommended UI actions:
+
+| Status | `error` field | Trigger | Recommended UI action |
+|--------|--------------|---------|----------------------|
+| `400` | `invalid_request` | Malformed request body | Show field validation errors |
+| `400` | `invalid_grant` | Expired / replayed refresh token | Clear tokens, redirect to login |
+| `400` | `weak_password` | Password fails complexity policy | Show per-rule feedback |
+| `401` | `invalid_credentials` | Wrong email or password | Generic "Invalid email or password" |
+| `401` | `invalid_token` | Expired or invalid access token | Attempt silent refresh |
+| `401` | `invalid_client` | Client credentials rejected | Log error, do not expose to user |
+| `409` | `already_completed` | `force_password_change` already cleared | Redirect to login |
+| `429` | `account_locked` | Too many failed attempts | Show lockout countdown from `Retry-After` |
+
+11. **§9 — Security Best Practices:** Summarise frontend-specific security guidance:
+    - Never log or store tokens in `localStorage` or `sessionStorage`.
+    - Use `state` and `PKCE` parameters in the Authorization Code Flow to prevent CSRF and code-injection attacks.
+    - Implement the silent refresh singleton to avoid token leakage from concurrent requests.
+    - Clear all tokens on logout, tab close (for in-memory tokens), and after detecting a replay detection error.
+    - Display lockout countdowns client-side but always re-validate server-side on retry.
+    - Do not display different error messages for unknown email vs. wrong password.
+12. **§10 — Complete Code Examples:** Provide runnable code examples in TypeScript (with `fetch`) covering:
+    - `loginUser(email, password)` — handles normal login, `force_password_change`, lockout, and generic errors.
+    - `changePassword(challengeToken, newPassword)` — full change-password call with error handling.
+    - `refreshAccessToken(refreshToken)` — singleton-guarded silent refresh returning new tokens.
+    - `logout(refreshToken)` — revoke + clear + redirect.
+    - An `AuthClient` class wiring all four functions together with an interceptor that auto-refreshes on `401`.
+
+**Acceptance Criteria:**
+- [ ] New file `docs/FrontendIntegrationGuide.md` created at version `0.3.0`
+- [ ] All six auth endpoints used by frontends documented (`/login`, `/change-password`, `/token`, `/revoke`, and Authorization Code endpoints)
+- [ ] Mermaid flow diagram present in §2
+- [ ] Error reference table covers all eight error cases
+- [ ] TypeScript code examples present for all four helper functions and the `AuthClient` class
+- [ ] Security best practices section explicitly warns against `localStorage` token storage
+- [ ] Document cross-references `ClientIntegrationGuide.md` for OAuth Authorization Code Flow detail
+
 ## 3. Task Tracing
 
 ### Requirements → Tasks
@@ -1120,6 +1326,7 @@ Fix any data races or failures. Confirm coverage targets.
 | Database migrations (users, clients, refresh_tokens, audit_log) | T1 |
 | sqlc queries and regenerated repository layer | T1 |
 | Test coverage ≥ 80 %, `-race` clean, load test updated | T9 |
+| Operator and developer documentation updated to reflect v0.3.0 | T10 |
 
 ### Tasks → Deliverables
 
@@ -1134,3 +1341,4 @@ Fix any data races or failures. Confirm coverage targets.
 | T7 | `internal/util/password/validator.go`, updated login handler response, new `change-password` handler |
 | T8 | Updated `internal/service/auth/authorization.go` (issuance + rotation), new `revoke` handler, updated logout/admin-revoke paths |
 | T9 | Test files for all new packages, updated `internal/loadtest/load_test.go` |
+| T10 | Updated `docs/AdministratorGuide.md`, `docs/ClientIntegrationGuide.md`, `docs/DatabaseDocumentation.md`, `docs/ServiceLayerDocumentation.md` — all at version 0.3.0; new `docs/FrontendIntegrationGuide.md` |
