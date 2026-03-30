@@ -234,3 +234,11 @@ type LoginResponse struct {
 	TokenType   string `json:"token_type"`
 	ExpiresIn   int64  `json:"expires_in"`
 }
+
+// --- Force password change ---
+
+// ChangePasswordRequest is the request body for POST /api/v1/auth/change-password.
+type ChangePasswordRequest struct {
+	ChallengeToken string `json:"challenge_token" binding:"required"`
+	NewPassword    string `json:"new_password" binding:"required"`
+}

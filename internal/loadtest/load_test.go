@@ -117,10 +117,10 @@ func newLoadEnv(t *testing.T) *loadEnv {
 	pSvc, err := providersvc.New(mockQ, encKey, cfg.Server.Env)
 	require.NoError(t, err)
 
-	as, err := authsvc.New(mockQ, cfg, pSvc)
-	require.NoError(t, err)
-
 	auditSvc := audit.New(mockQ)
+
+	as, err := authsvc.New(mockQ, cfg, pSvc, auditSvc)
+	require.NoError(t, err)
 
 	uSvc := usersvc.New(mockQ)
 	cSvc := clientsvc.New(mockQ, cfg.Server.Env, auditSvc)
@@ -138,7 +138,7 @@ func newLoadEnv(t *testing.T) *loadEnv {
 	// API v1 routes (auth, clients, providers, users, sessions).
 	apiV1 := router.Group("/api/v1")
 	apiV1.Use(middleware.ContextMiddleware(cfg))
-	v1.RegisterRoutes(apiV1, as, uSvc, pSvc, cSvc, sSvc)
+	v1.RegisterRoutes(apiV1, as, uSvc, pSvc, cSvc, sSvc, auditSvc)
 
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)

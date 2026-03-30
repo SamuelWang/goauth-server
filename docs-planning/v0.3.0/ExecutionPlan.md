@@ -691,9 +691,9 @@ Define `Validate(password, userEmail string) error` enforcing the full SRS passw
 Embed the deny-list as a `//go:embed` file (`internal/util/password/denylist.txt`) so it has no runtime external dependency.
 
 **Acceptance Criteria:**
-- [ ] Each rule independently blocks non-compliant passwords
-- [ ] Deny-list file present and embedded at compile time
-- [ ] `Validate` returns a descriptive multi-error (or single error naming the failed rule)
+- [x] Each rule independently blocks non-compliant passwords
+- [x] Deny-list file present and embedded at compile time
+- [x] `Validate` returns a descriptive multi-error (or single error naming the failed rule)
 
 #### Sub-task 7.2 — Unit tests for `validator.go`
 
@@ -708,8 +708,8 @@ Write `internal/util/password/validator_test.go` with table-driven tests coverin
 - Valid password meeting all rules → nil
 
 **Acceptance Criteria:**
-- [ ] All eight cases pass
-- [ ] `go test ./internal/util/password/...` passes
+- [x] All eight cases pass
+- [x] `go test ./internal/util/password/...` passes
 
 #### Sub-task 7.3 — Add challenge token helpers to auth service
 
@@ -727,9 +727,9 @@ Implementation:
 - Tokens are single-use conceptually — the handler (7.5) must not accept the same token after the password is changed (enforced by `force_password_change=false` check: if the DB flag is already false when the challenge arrives, reject with `409 Conflict`).
 
 **Acceptance Criteria:**
-- [ ] Generated token parses correctly in `ValidateChallengeToken`
-- [ ] Expired token returns an error
-- [ ] Token with wrong `typ` returns an error
+- [x] Generated token parses correctly in `ValidateChallengeToken`
+- [x] Expired token returns an error
+- [x] Token with wrong `typ` returns an error
 
 #### Sub-task 7.4 — Update login handler for `force_password_change` branch
 
@@ -742,8 +742,8 @@ In the login handler (after calling `VerifyCredentials` from T6):
 - If `false`: proceed with normal access token issuance.
 
 **Acceptance Criteria:**
-- [ ] Flagged user receives challenge token response, not an access token
-- [ ] Normal user login flow unchanged
+- [x] Flagged user receives challenge token response, not an access token
+- [x] Normal user login flow unchanged
 
 #### Sub-task 7.5 — Implement `POST /api/v1/auth/change-password` handler
 
@@ -767,18 +767,18 @@ Handler logic:
 10. Issue a new access token; return `200` with token response.
 
 **Acceptance Criteria:**
-- [ ] Invalid challenge token → `400`
-- [ ] Already-cleared `force_password_change` flag → `409`
-- [ ] Weak new password → `400` with policy description
-- [ ] Success → `force_password_change=false` in DB, both audit entries written, access token returned
+- [x] Invalid challenge token → `400`
+- [x] Already-cleared `force_password_change` flag → `409`
+- [x] Weak new password → `400` with policy description
+- [x] Success → `force_password_change=false` in DB, both audit entries written, access token returned
 
 #### Sub-task 7.6 — Register `change-password` route
 
 In the API router, add `POST /api/v1/auth/change-password` (no auth middleware required — the challenge token is the credential).
 
 **Acceptance Criteria:**
-- [ ] Route registered and reachable
-- [ ] Endpoint does not appear in JWT-protected route group
+- [x] Route registered and reachable
+- [x] Endpoint does not appear in JWT-protected route group
 
 ### Task 8 — Refresh Token System
 
@@ -1079,7 +1079,7 @@ Extend or create handler-level tests:
 Referenced in T7.2. Confirm all eight policy cases are implemented and green.
 
 **Acceptance Criteria:**
-- [ ] `go test ./internal/util/password/...` passes, 100% coverage of `validator.go`
+- [x] `go test ./internal/util/password/...` passes, 100% coverage of `validator.go`
 
 #### Sub-task 9.14 — Update load test
 

@@ -23,6 +23,9 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 		publicAuth.POST("/token", middleware.RateLimitByIP(middleware.TokenRatePerMin, middleware.TokenRatePerMin), h.TokenExchange)
 		// Direct login: 10 requests per minute per IP.
 		publicAuth.POST("/login", middleware.RateLimitByIP(middleware.LoginRatePerMin, middleware.LoginRatePerMin), h.Login)
+		// Force-password-change exchange: 10 requests per minute per IP.
+		// The challenge token is the credential; no Authorization header needed.
+		publicAuth.POST("/change-password", middleware.RateLimitByIP(middleware.LoginRatePerMin, middleware.LoginRatePerMin), h.ChangePassword)
 	}
 
 	// Public client-scoped routes

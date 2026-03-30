@@ -68,9 +68,20 @@ func (h *ApiV1Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// T7.4 will replace this stub with a proper challenge token response.
+	// Users flagged for a forced password change receive a short-lived challenge
+	// token instead of an access token. The challenge token must be exchanged via
+	// POST /api/v1/auth/change-password before a regular access token is issued.
 	if result.ForcePasswordChange {
-		c.JSON(http.StatusOK, gin.H{"require": "password_change"})
+		challengeToken, err := h.authService.GenerateChallengeToken(result.User.ID)
+		if err != nil {
+			log.Printf("Login: generating challenge token: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"challenge_token": challengeToken,
+			"require":         "password_change",
+		})
 		return
 	}
 
