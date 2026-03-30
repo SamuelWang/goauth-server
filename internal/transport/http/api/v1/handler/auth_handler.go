@@ -99,10 +99,11 @@ func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, TokenExchangeResponse{
-		AccessToken: tokenResp.AccessToken,
-		TokenType:   tokenResp.TokenType,
-		ExpiresIn:   tokenResp.ExpiresIn,
-		Scope:       tokenResp.Scope,
+		AccessToken:  tokenResp.AccessToken,
+		TokenType:    tokenResp.TokenType,
+		ExpiresIn:    tokenResp.ExpiresIn,
+		Scope:        tokenResp.Scope,
+		RefreshToken: tokenResp.RefreshToken,
 	})
 	metrics.TokensIssuedTotal.Inc()
 }

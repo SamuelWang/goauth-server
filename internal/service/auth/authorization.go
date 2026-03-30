@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"crypto/subtle"
 
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
@@ -36,10 +38,11 @@ var (
 
 // TokenResponse holds the issued access token and its metadata.
 type TokenResponse struct {
-	AccessToken string
-	TokenType   string
-	ExpiresIn   int64 // seconds until expiry
-	Scope       *string
+	AccessToken  string
+	TokenType    string
+	ExpiresIn    int64 // seconds until expiry
+	Scope        *string
+	RefreshToken string // non-empty when a refresh token was issued
 }
 
 // InitiateAuthorization validates the client and provider, checks that
@@ -247,7 +250,7 @@ func (s *Service) ExchangeCodeForToken(
 	// 7. Store the token hash for revocation lookup.
 	tokenHash := util.SHA256Hex(tokenString)
 	expiresAt := time.Now().Add(s.Expiry())
-	_, err = s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
+	accessTokenRecord, err := s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: tokenHash,
 		ClientID:  clientID,
 		UserID:    user.ID,
@@ -258,11 +261,57 @@ func (s *Service) ExchangeCodeForToken(
 		return nil, fmt.Errorf("storing access token record: %w", err)
 	}
 
+	// 8. Issue a refresh token when the client allows it and "offline_access" scope
+	// was granted. The raw token value is returned to the caller; only its SHA-256
+	// hash is persisted to the database.
+	var rawRefreshToken string
+	grantedScope := ""
+	if authCode.Scope != nil {
+		grantedScope = *authCode.Scope
+	}
+	if client.AllowRefreshTokens && strings.Contains(grantedScope, "offline_access") {
+		tokenValue, err := util.GenerateSecureToken(32)
+		if err != nil {
+			return nil, fmt.Errorf("generating refresh token: %w", err)
+		}
+		rtHash := util.SHA256Hex(tokenValue)
+		familyID := uuid.New()
+		rtExpiresAt := time.Now().Add(time.Duration(s.cfg.RefreshToken.ExpiryDays) * 24 * time.Hour)
+		_, err = s.repo.CreateRefreshToken(ctx, repository.CreateRefreshTokenParams{
+			TokenHash:       rtHash,
+			TokenFamilyID:   familyID,
+			ClientID:        clientID,
+			UserID:          user.ID,
+			AccessTokenID:   accessTokenRecord.ID,
+			PreviousTokenID: uuid.Nil,
+			Scope:           grantedScope,
+			ExpiresAt:       rtExpiresAt,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("storing refresh token: %w", err)
+		}
+		if s.auditSvc != nil {
+			uid := user.ID
+			cid := clientID
+			_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{
+				EventType: audit.EventRefreshTokenIssued,
+				UserID:    &uid,
+				ClientID:  &cid,
+				Metadata: map[string]any{
+					"scope":      grantedScope,
+					"expires_at": rtExpiresAt.UTC().Format(time.RFC3339),
+				},
+			})
+		}
+		rawRefreshToken = tokenValue
+	}
+
 	return &TokenResponse{
-		AccessToken: tokenString,
-		TokenType:   "Bearer",
-		ExpiresIn:   int64(s.Expiry().Seconds()),
-		Scope:       authCode.Scope,
+		AccessToken:  tokenString,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.Expiry().Seconds()),
+		Scope:        authCode.Scope,
+		RefreshToken: rawRefreshToken,
 	}, nil
 }
 

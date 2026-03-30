@@ -761,7 +761,7 @@ Handler logic:
 4. Hash new password with Argon2id.
 5. `repo.UpdatePasswordHash(ctx, userID, hash)`.
 6. `repo.SetForcePasswordChange(ctx, userID, false)`.
-7. Call refresh token revocation stub (concrete implementation wired in T8.6).
+7. Call refresh token revocation stub (concrete implementation wired in T8.5).
 8. `auditSvc.LogEvent(EventUserPasswordChanged, ...)`.
 9. `auditSvc.LogEvent(EventForcePasswordChangeSatisfied, ...)`.
 10. Issue a new access token; return `200` with token response.
@@ -787,31 +787,14 @@ In the API router, add `POST /api/v1/auth/change-password` (no auth middleware r
 
 This task covers the full lifecycle: issuance, rotation, replay detection, and revocation.
 
-#### Sub-task 8.1 — Token generation helpers (`internal/service/auth/refresh.go`)
-
-Create `internal/service/auth/refresh.go` with package-private helpers:
-
-```go
-// generateRefreshTokenValue returns a cryptographically random 32-byte base64url string.
-func generateRefreshTokenValue() (string, error)
-
-// hashRefreshToken returns hex(sha256(value)).
-func hashRefreshToken(value string) string
-```
-
-**Acceptance Criteria:**
-- [ ] `generateRefreshTokenValue` uses `crypto/rand`; panics or errors if entropy unavailable
-- [ ] `hashRefreshToken` output is deterministic and constant-time-comparable
-- [ ] Unit tests verify that two distinct calls produce different values
-
-#### Sub-task 8.2 — Extend `ExchangeAuthorizationCode` to issue refresh tokens
+#### Sub-task 8.1 — Extend `ExchangeAuthorizationCode` to issue refresh tokens
 
 In `internal/service/auth/authorization.go`, after the access token is stored:
 
 1. Check `client.AllowRefreshTokens == true` AND the granted scopes contain `"offline_access"`.
 2. If yes:
-   a. `tokenValue, _ := generateRefreshTokenValue()`
-   b. `tokenHash := hashRefreshToken(tokenValue)`
+   a. `tokenValue, err := util.GenerateSecureToken(32)`
+   b. `tokenHash := util.SHA256Hex(tokenValue)`
    c. `familyID := uuid.New()`
    d. Compute `expiresAt = now.Add(cfg.RefreshToken.ExpiryDays * 24h)`.
    e. `repo.CreateRefreshToken(ctx, CreateRefreshTokenParams{TokenHash: tokenHash, FamilyID: familyID, ClientID: client.ID, UserID: user.ID, AccessTokenID: &accessToken.ID, Scope: grantedScope, ExpiresAt: expiresAt})`.
@@ -819,11 +802,11 @@ In `internal/service/auth/authorization.go`, after the access token is stored:
 3. Return `tokenValue` in the response `refresh_token` field (or empty string if not issued).
 
 **Acceptance Criteria:**
-- [ ] Refresh token issued only when both conditions are met
-- [ ] Token value in response != token hash in DB
-- [ ] Audit entry written without token value
+- [x] Refresh token issued only when both conditions are met
+- [x] Token value in response != token hash in DB
+- [x] Audit entry written without token value
 
-#### Sub-task 8.3 — Add `grant_type=refresh_token` branch to token handler
+#### Sub-task 8.2 — Add `grant_type=refresh_token` branch to token handler
 
 In the token endpoint handler (or create `internal/service/auth/rotation.go` for the service logic):
 
@@ -834,14 +817,14 @@ func (s *Service) RotateRefreshToken(ctx context.Context, rawToken, clientID, cl
 
 Logic:
 1. Authenticate client with SHA-256 secret comparison.
-2. `tokenHash := hashRefreshToken(rawToken)`; `record, err := repo.GetRefreshTokenByHash(ctx, tokenHash)`.
+2. `tokenHash := util.SHA256Hex(rawToken)`; `record, err := repo.GetRefreshTokenByHash(ctx, tokenHash)`.
 3. If not found → return `ErrInvalidGrant`.
-4. If `record.IsRevoked` → **replay**: go to sub-task 8.4. Return `ErrInvalidGrant`.
+4. If `record.IsRevoked` → **replay**: go to sub-task 8.3. Return `ErrInvalidGrant`.
 5. If `record.ExpiresAt.Before(now)` → return `ErrTokenExpired`.
 6. If `record.ClientID != clientID` → return `ErrInvalidGrant` (client mismatch).
 7. `repo.MarkRefreshTokenUsed(ctx, record.ID, now)`.
 8. Issue new access token (existing `GenerateAccessToken`).
-9. Issue new refresh token (`generateRefreshTokenValue`, store with `FamilyID = record.FamilyID`, `PreviousTokenID = &record.ID`).
+9. Issue new refresh token (`util.GenerateSecureToken(32)`, store with `FamilyID = record.FamilyID`, `PreviousTokenID = &record.ID`).
 10. `auditSvc.LogEvent(EventRefreshTokenRotated, ...)`.
 11. Return new access + refresh token values.
 
@@ -853,9 +836,9 @@ Logic:
 - [ ] Wrong client ID returns `400 invalid_grant`
 - [ ] Expired token returns `400 invalid_grant`
 
-#### Sub-task 8.4 — Implement replay detection
+#### Sub-task 8.3 — Implement replay detection
 
-Inside `RotateRefreshToken` (called from 8.3 when `record.IsRevoked == true`):
+Inside `RotateRefreshToken` (called from 8.2 when `record.IsRevoked == true`):
 
 1. `repo.RevokeRefreshTokenFamily(ctx, record.FamilyID, "replay_detected")`.
 2. `auditSvc.LogEvent(EventReplayDetected, UserID: &record.UserID, ClientID: &record.ClientID, Metadata: {"family_id": record.FamilyID})`.
@@ -867,7 +850,7 @@ Inside `RotateRefreshToken` (called from 8.3 when `record.IsRevoked == true`):
 - [ ] Both audit events written
 - [ ] Subsequent use of any token in the same family also triggers replay detection (because all are now `is_revoked=true`)
 
-#### Sub-task 8.5 — Implement `POST /api/v1/auth/revoke` (RFC 7009)
+#### Sub-task 8.4 — Implement `POST /api/v1/auth/revoke` (RFC 7009)
 
 Create `internal/transport/http/api/v1/handler/revoke.go`.
 
@@ -896,7 +879,7 @@ Handler logic:
 - [ ] Valid access token-only revocation works
 - [ ] Unauthenticated request returns `401` (the only error RFC 7009 specifies)
 
-#### Sub-task 8.6 — Wire refresh token revocation into sensitive events
+#### Sub-task 8.5 — Wire refresh token revocation into sensitive events
 
 Add `RevokeRefreshTokensByUser(ctx, userID, reason)` calls (a helper wrapping `repo.RevokeRefreshTokenFamily` per-user OR `repo.RevokeRefreshToken` for all user tokens) at three existing/new call sites:
 
@@ -919,7 +902,7 @@ WHERE user_id = $1 AND is_revoked = false;
 - [ ] Logout revokes all user refresh tokens
 - [ ] Admin session revoke writes `admin_revoked` reason
 
-#### Sub-task 8.7 — Optional cleanup endpoint
+#### Sub-task 8.6 — Optional cleanup endpoint
 
 Add `DELETE /ops/maintenance/cleanup-tokens` to the ops router (ops handler under `internal/transport/http/ops/handler/`):
 
@@ -1149,5 +1132,5 @@ Fix any data races or failures. Confirm coverage targets.
 | T5 | `internal/app/auth-server/bootstrap.go`, updated `server.go` startup sequence |
 | T6 | Updated `internal/service/auth/authorization.go`, new admin unlock handler, updated login handler |
 | T7 | `internal/util/password/validator.go`, updated login handler response, new `change-password` handler |
-| T8 | Updated `internal/service/auth/authorization.go` (issuance + rotation), new `internal/service/auth/refresh.go`, new `revoke` handler, updated logout/admin-revoke paths |
+| T8 | Updated `internal/service/auth/authorization.go` (issuance + rotation), new `revoke` handler, updated logout/admin-revoke paths |
 | T9 | Test files for all new packages, updated `internal/loadtest/load_test.go` |

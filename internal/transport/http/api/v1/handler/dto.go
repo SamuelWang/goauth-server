@@ -69,10 +69,11 @@ type TokenExchangeRequest struct {
 
 // TokenExchangeResponse is the OAuth 2.0 token endpoint response.
 type TokenExchangeResponse struct {
-	AccessToken string  `json:"access_token"`
-	TokenType   string  `json:"token_type"`
-	ExpiresIn   int64   `json:"expires_in"`
-	Scope       *string `json:"scope,omitempty"`
+	AccessToken  string  `json:"access_token"`
+	TokenType    string  `json:"token_type"`
+	ExpiresIn    int64   `json:"expires_in"`
+	Scope        *string `json:"scope,omitempty"`
+	RefreshToken string  `json:"refresh_token,omitempty"`
 }
 
 // --- Public provider list ---
