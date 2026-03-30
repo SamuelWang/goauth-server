@@ -3,9 +3,7 @@ package authserver
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/mail"
@@ -16,6 +14,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/audit"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
@@ -61,13 +60,6 @@ func hashPasswordArgon2id(plainPassword string) (string, error) {
 		b64Hash,
 	)
 	return encoded, nil
-}
-
-// hashClientSecret returns hex(sha256(plainSecret)), matching the format used
-// by the client service for all secret storage.
-func hashClientSecret(plain string) string {
-	h := sha256.Sum256([]byte(plain))
-	return hex.EncodeToString(h[:])
 }
 
 // validateBootstrapRedirectURI checks that rawURI is a valid URL and enforces
@@ -228,7 +220,7 @@ func BootstrapDefaultClient(
 	}
 
 	// Hash client secret with SHA-256 (never store plain secret).
-	secretHash := hashClientSecret(cfg.DefaultClientSecret)
+	secretHash := util.SHA256Hex(cfg.DefaultClientSecret)
 
 	// Use uuid.Nil as the "created_by" for bootstrap-created clients to clearly
 	// distinguish them from admin-created clients in the audit trail.

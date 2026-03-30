@@ -4,9 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +15,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -98,18 +97,12 @@ func (h *testAuthHelper) generateExpiredToken(t *testing.T) string {
 	return signed
 }
 
-// hashForTest produces the hex SHA-256 hash that the service stores in the DB.
-func hashForTest(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
-}
-
 // activeTokenRecord returns a non-revoked AccessToken row for the given raw token.
 func activeTokenRecord(rawToken string) repository.AccessToken {
 	notRevoked := false
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashForTest(rawToken),
+		TokenHash: util.SHA256Hex(rawToken),
 		ClientID:  uuid.New(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -122,7 +115,7 @@ func revokedTokenRecord(rawToken string) repository.AccessToken {
 	revoked := true
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashForTest(rawToken),
+		TokenHash: util.SHA256Hex(rawToken),
 		ClientID:  uuid.New(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -230,7 +223,7 @@ func TestAuthMiddleware_TokenNotFoundInDB(t *testing.T) {
 
 	validToken := h.generateValidToken(t)
 	// Token not present in DB → treated as invalid/revoked.
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	var handlerCalled bool
@@ -256,7 +249,7 @@ func TestAuthMiddleware_RevokedToken(t *testing.T) {
 	router := setupTestRouter()
 
 	validToken := h.generateValidToken(t)
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(revokedTokenRecord(validToken), nil)
 
 	var handlerCalled bool
@@ -282,7 +275,7 @@ func TestAuthMiddleware_RevocationDBError(t *testing.T) {
 	router := setupTestRouter()
 
 	validToken := h.generateValidToken(t)
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(repository.AccessToken{}, assert.AnError)
 
 	var handlerCalled bool
@@ -307,7 +300,7 @@ func TestAuthMiddleware_ValidToken_Cookie(t *testing.T) {
 	router := setupTestRouter()
 
 	validToken := h.generateValidToken(t)
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(activeTokenRecord(validToken), nil)
 
 	var capturedUserID, capturedEmail, capturedRawToken string
@@ -339,7 +332,7 @@ func TestAuthMiddleware_ValidToken_BearerHeader(t *testing.T) {
 	router := setupTestRouter()
 
 	validToken := h.generateValidToken(t)
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(validToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(validToken)).
 		Return(activeTokenRecord(validToken), nil)
 
 	var capturedUserID string
@@ -367,7 +360,7 @@ func TestAuthMiddleware_HeaderTakesPrecedenceOverCookie(t *testing.T) {
 	// Only the header token is active; the cookie token is not set up on the mock,
 	// which means the middleware must prefer the header.
 	headerToken := h.generateValidToken(t)
-	mockQ.On("GetAccessToken", mock.Anything, hashForTest(headerToken)).
+	mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(headerToken)).
 		Return(activeTokenRecord(headerToken), nil)
 
 	router.GET("/protected", AuthMiddleware(h.service), func(c *gin.Context) {

@@ -5,9 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -22,6 +20,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
@@ -96,18 +95,6 @@ func activeClient(t *testing.T, secretHash string) repository.Client {
 	}
 }
 
-// sha256Hash hashes the given plain secret using SHA-256 for use in test fixtures.
-func sha256Hash(plain string) string {
-	h := sha256.Sum256([]byte(plain))
-	return hex.EncodeToString(h[:])
-}
-
-// tokenHash returns SHA-256 hex of the token string.
-func tokenHash(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
-}
-
 // activeProviderWithSecret returns a provider.OAuthProviderWithSecret whose
 // TokenURL and UserInfoURL point to the supplied httptest.Server base URL.
 func activeProviderWithSecret(serverURL string, clientID uuid.UUID) *provider.OAuthProviderWithSecret {
@@ -152,7 +139,7 @@ func TestInitiateAuthorization_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	client := activeClient(t, sha256Hash("s3cr3t"))
+	client := activeClient(t, util.SHA256Hex("s3cr3t"))
 	prov := activeProviderWithSecret("https://fake.provider.example.com", client.ID)
 
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
@@ -245,7 +232,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "client-secret-value"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	user := sampleUser()
 
 	isRevoked := false
@@ -292,7 +279,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 func TestExchangeCodeForToken_InvalidClientSecret(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
-	client := activeClient(t, sha256Hash("correct-secret"))
+	client := activeClient(t, util.SHA256Hex("correct-secret"))
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 
 	svc := newTestService(t, q, psvc)
@@ -304,7 +291,7 @@ func TestExchangeCodeForToken_CodeNotFound(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	q.On("GetAuthorizationCode", mock.Anything, "missing-code").Return(repository.AuthorizationCode{}, pgx.ErrNoRows)
 
@@ -317,7 +304,7 @@ func TestExchangeCodeForToken_CodeExpired(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -340,7 +327,7 @@ func TestExchangeCodeForToken_CodeAlreadyUsed(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	usedAt := time.Now().Add(-2 * time.Minute)
 	codeRow := repository.AuthorizationCode{
@@ -364,7 +351,7 @@ func TestExchangeCodeForToken_CodeRevoked(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := true
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -387,7 +374,7 @@ func TestExchangeCodeForToken_ClientMismatch(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -410,7 +397,7 @@ func TestExchangeCodeForToken_RedirectMismatch(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, sha256Hash(plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -437,13 +424,13 @@ func TestRevokeToken_Success(t *testing.T) {
 
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: tokenHash("my-token"),
+		TokenHash: util.SHA256Hex("my-token"),
 	}
-	q.On("GetAccessToken", mock.Anything, tokenHash("my-token")).Return(tokenRow, nil)
+	q.On("GetAccessToken", mock.Anything, util.SHA256Hex("my-token")).Return(tokenRow, nil)
 	q.On("RevokeAccessToken", mock.Anything, tokenRow.ID).Return(nil)
 
 	svc := newTestService(t, q, psvc)
-	err := svc.RevokeToken(context.Background(), tokenHash("my-token"))
+	err := svc.RevokeToken(context.Background(), util.SHA256Hex("my-token"))
 	require.NoError(t, err)
 	q.AssertExpectations(t)
 }
@@ -465,7 +452,7 @@ func TestRevokeRawToken_Success(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "my-raw-access-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: hash,
@@ -484,7 +471,7 @@ func TestRevokeRawToken_NotFound(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "nonexistent-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	svc := newTestService(t, q, psvc)
@@ -500,7 +487,7 @@ func TestIsTokenRevoked_NotInDB_ReturnsRevoked(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "unknown-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	svc := newTestService(t, q, psvc)
@@ -515,7 +502,7 @@ func TestIsTokenRevoked_ActiveToken_ReturnsFalse(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "active-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	isRevoked := false
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
@@ -536,7 +523,7 @@ func TestIsTokenRevoked_RevokedToken_ReturnsTrue(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "revoked-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	isRevoked := true
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
@@ -557,7 +544,7 @@ func TestIsTokenRevoked_RepoError(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "error-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, errors.New("db error"))
 
 	svc := newTestService(t, q, psvc)
@@ -1115,7 +1102,7 @@ func TestExchangeCodeForToken_AuthCodeRepoError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := sha256Hash("test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
@@ -1131,7 +1118,7 @@ func TestExchangeCodeForToken_MarkUsedError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := sha256Hash("test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 
 	code := repository.AuthorizationCode{
@@ -1156,7 +1143,7 @@ func TestExchangeCodeForToken_GetUserError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := sha256Hash("test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 	userID := uuid.New()
 
@@ -1183,7 +1170,7 @@ func TestExchangeCodeForToken_CreateAccessTokenError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := sha256Hash("test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 	user := sampleUser()
 

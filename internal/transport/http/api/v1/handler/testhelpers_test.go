@@ -5,9 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
@@ -25,6 +23,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
 	v1 "github.com/SamuelWang/goauth-server/internal/transport/http/api/v1"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -118,18 +117,12 @@ func (e *testEnv) generateToken(t *testing.T, userID, email string) string {
 	return token
 }
 
-// hashToken returns the hex SHA-256 hash used as the token_hash in the DB.
-func hashToken(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
-}
-
 // activeTokenRow builds a non-revoked AccessToken repository row for the given raw token.
 func activeTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 	notRevoked := false
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashToken(rawToken),
+		TokenHash: util.SHA256Hex(rawToken),
 		ClientID:  uuid.New(),
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -142,7 +135,7 @@ func revokedTokenRow(rawToken string) repository.AccessToken {
 	revoked := true
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashToken(rawToken),
+		TokenHash: util.SHA256Hex(rawToken),
 		ClientID:  uuid.New(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),

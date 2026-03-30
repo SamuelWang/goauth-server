@@ -3,16 +3,15 @@ package client
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/audit"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -153,7 +152,7 @@ func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUs
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash := hashSecret(plainSecret)
+	hash := util.SHA256Hex(plainSecret)
 
 	isActive := dto.IsActive
 	row, err := s.repo.CreateClient(ctx, repository.CreateClientParams{
@@ -221,7 +220,7 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash := hashSecret(plainSecret)
+	hash := util.SHA256Hex(plainSecret)
 
 	updated, err := s.repo.RegenerateClientSecret(ctx, repository.RegenerateClientSecretParams{
 		ID:               existing.ID,
@@ -268,18 +267,11 @@ func generateSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// hashSecret hashes a plain-text secret using SHA-256, returning the hex-encoded digest.
-func hashSecret(plain string) string {
-	h := sha256.Sum256([]byte(plain))
-	return hex.EncodeToString(h[:])
-}
-
 // ValidateClientSecret reports whether the supplied plain-text secret matches
 // the stored SHA-256 hex hash. The comparison is constant-time to prevent
 // timing side-channels.
 func ValidateClientSecret(storedHash, suppliedSecret string) bool {
-	h := sha256.Sum256([]byte(suppliedSecret))
-	supplied := hex.EncodeToString(h[:])
+	supplied := util.SHA256Hex(suppliedSecret)
 	return subtle.ConstantTimeCompare([]byte(storedHash), []byte(supplied)) == 1
 }
 

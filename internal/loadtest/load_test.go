@@ -15,9 +15,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"net/http"
@@ -40,6 +38,7 @@ import (
 	usersvc "github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
 	v1 "github.com/SamuelWang/goauth-server/internal/transport/http/api/v1"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -78,11 +77,6 @@ type loadEnv struct {
 	client  *http.Client
 	authSvc *authsvc.Service
 	privKey *ecdsa.PrivateKey
-}
-
-func (e *loadEnv) tokenHash(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
 }
 
 // newLoadEnv constructs an in-process httptest.Server backed by a mock
@@ -292,7 +286,7 @@ func TestLoad(t *testing.T) {
 	rawToken, err := env.authSvc.GenerateAccessToken(userID.String(), "loadtest@example.com")
 	require.NoError(t, err)
 
-	tHash := env.tokenHash(rawToken)
+	tHash := util.SHA256Hex(rawToken)
 	notRevoked := false
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),

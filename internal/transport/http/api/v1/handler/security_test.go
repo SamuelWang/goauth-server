@@ -21,10 +21,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,6 +33,7 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -47,17 +46,12 @@ import (
 // Helpers
 // ---------------------------------------------------------------------------
 
-func hashTokenForPentest(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
-}
-
 // notRevokedTokenRow builds a non-revoked AccessToken for the given raw token and user.
 func notRevokedTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 	notRevoked := false
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashTokenForPentest(rawToken),
+		TokenHash: util.SHA256Hex(rawToken),
 		ClientID:  uuid.New(),
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -226,7 +220,7 @@ func TestSecurity_RevokedTokenRejected(t *testing.T) {
 
 	// Simulate a revoked token stored in the DB.
 	revokedRow := revokedTokenRow(token)
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(revokedRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(revokedRow, nil)
 
 	w := env.doRequestWithRawToken(http.MethodGet, "/api/v1/auth/me", nil, token)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -243,7 +237,7 @@ func TestSecurity_TokenNotFoundInDB(t *testing.T) {
 	userID := uuid.New()
 	token := env.generateToken(t, userID.String(), "user@example.com")
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(repository.AccessToken{}, pgx.ErrNoRows)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	w := env.doRequestWithRawToken(http.MethodGet, "/api/v1/auth/me", nil, token)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -483,7 +477,7 @@ func TestSecurity_CSRF_MissingHeader(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -509,7 +503,7 @@ func TestSecurity_CSRF_WrongHeaderValue(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -534,7 +528,7 @@ func TestSecurity_CSRF_MissingCookie(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -560,7 +554,7 @@ func TestSecurity_CSRF_EmptyHeaderValue(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -1299,8 +1293,7 @@ func TestSecurity_InactiveClientRejected(t *testing.T) {
 
 	redirectURI := "https://app.example.com/callback"
 	plainSecret := "my-secret"
-	h := sha256.Sum256([]byte(plainSecret))
-	hash := hex.EncodeToString(h[:])
+	hash := util.SHA256Hex(plainSecret)
 
 	isActive := false
 	inactiveClient := repository.Client{

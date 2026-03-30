@@ -3,10 +3,8 @@ package auth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -56,14 +54,6 @@ func (s *Service) ValidateAccessToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
-}
-
-// hashToken returns the hex-encoded SHA-256 hash of tokenString.
-// This is stored in the database so that a bearer token can be looked up and
-// revoked without storing the plain token value.
-func hashToken(tokenString string) string {
-	h := sha256.Sum256([]byte(tokenString))
-	return hex.EncodeToString(h[:])
 }
 
 // generateAuthCode returns a cryptographically secure, URL-safe authorization code

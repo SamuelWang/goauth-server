@@ -8,6 +8,7 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,7 +30,7 @@ func sampleClient() repository.Client {
 	return repository.Client{
 		ID:               uuid.New(),
 		Name:             "test-client",
-		ClientSecretHash: hashSecret(sampleClientSecret),
+		ClientSecretHash: util.SHA256Hex(sampleClientSecret),
 		RedirectUris:     []string{"https://example.com/callback"},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,
@@ -305,24 +306,24 @@ func TestGenerateSecret_IsBase64URL(t *testing.T) {
 
 func TestHashSecret_MatchesPlain(t *testing.T) {
 	plain := "my-secret"
-	hash := hashSecret(plain)
+	hash := util.SHA256Hex(plain)
 	assert.NotEmpty(t, hash)
 	// SHA-256 hex digest is always 64 characters
 	assert.Len(t, hash, 64)
 	// Deterministic: same input always yields the same hash
-	assert.Equal(t, hash, hashSecret(plain))
+	assert.Equal(t, hash, util.SHA256Hex(plain))
 }
 
 // --- ValidateClientSecret ---
 
 func TestValidateClientSecret_Match(t *testing.T) {
 	plain := "super-secret-value"
-	stored := hashSecret(plain)
+	stored := util.SHA256Hex(plain)
 	assert.True(t, ValidateClientSecret(stored, plain))
 }
 
 func TestValidateClientSecret_Mismatch(t *testing.T) {
-	stored := hashSecret("correct-secret")
+	stored := util.SHA256Hex("correct-secret")
 	assert.False(t, ValidateClientSecret(stored, "wrong-secret"))
 }
 

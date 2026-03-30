@@ -1,19 +1,20 @@
 package authserver
 
 import (
-"context"
-"errors"
-"testing"
-"time"
+	"context"
+	"errors"
+	"testing"
+	"time"
 
-"github.com/SamuelWang/goauth-server/internal/config"
-"github.com/SamuelWang/goauth-server/internal/repository"
-"github.com/SamuelWang/goauth-server/internal/service/audit"
-"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
-"github.com/google/uuid"
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/mock"
-"github.com/stretchr/testify/require"
+	"github.com/SamuelWang/goauth-server/internal/config"
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
+	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // ── helpers ─────────────────────────────────────────────────────────────
@@ -114,14 +115,14 @@ func TestBootstrapDefaultAdmin_ProductionWithFlag_Proceeds(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	q.On("CountAdminUsers", mock.Anything).Return(int64(0), nil)
 	q.On("CreateUser", mock.Anything, mock.MatchedBy(func(p repository.CreateUserParams) bool {
-return p.Email == cfg.DefaultAdminEmail
-})).Return(u, nil)
+		return p.Email == cfg.DefaultAdminEmail
+	})).Return(u, nil)
 	q.On("UpdatePasswordHash", mock.Anything, mock.MatchedBy(func(p repository.UpdatePasswordHashParams) bool {
-return p.ID == u.ID && p.PasswordHash != nil
+		return p.ID == u.ID && p.PasswordHash != nil
 	})).Return(u, nil)
 	q.On("SetForcePasswordChange", mock.Anything, repository.SetForcePasswordChangeParams{
-ID: u.ID, ForcePasswordChange: true,
-}).Return(u, nil)
+		ID: u.ID, ForcePasswordChange: true,
+	}).Return(u, nil)
 	q.On("PromoteUserToAdmin", mock.Anything, u.ID).Return(u, nil)
 	q.On("CreateAuditLogEntry", mock.Anything, mock.Anything).Return(uuid.New(), nil)
 
@@ -179,14 +180,14 @@ func TestBootstrapDefaultAdmin_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	q.On("CountAdminUsers", mock.Anything).Return(int64(0), nil)
 	q.On("CreateUser", mock.Anything, mock.MatchedBy(func(p repository.CreateUserParams) bool {
-return p.Email == cfg.DefaultAdminEmail && p.EmailVerified
+		return p.Email == cfg.DefaultAdminEmail && p.EmailVerified
 	})).Return(u, nil)
 	q.On("UpdatePasswordHash", mock.Anything, mock.MatchedBy(func(p repository.UpdatePasswordHashParams) bool {
-return p.ID == u.ID && p.PasswordHash != nil && *p.PasswordHash != ""
+		return p.ID == u.ID && p.PasswordHash != nil && *p.PasswordHash != ""
 	})).Return(u, nil)
 	q.On("SetForcePasswordChange", mock.Anything, repository.SetForcePasswordChangeParams{
-ID: u.ID, ForcePasswordChange: true,
-}).Return(u, nil)
+		ID: u.ID, ForcePasswordChange: true,
+	}).Return(u, nil)
 	q.On("PromoteUserToAdmin", mock.Anything, u.ID).Return(u, nil)
 	q.On("CreateAuditLogEntry", mock.Anything, mock.Anything).Return(uuid.New(), nil)
 
@@ -197,8 +198,8 @@ ID: u.ID, ForcePasswordChange: true,
 	q.AssertExpectations(t)
 	q.AssertCalled(t, "PromoteUserToAdmin", mock.Anything, u.ID)
 	q.AssertCalled(t, "SetForcePasswordChange", mock.Anything, repository.SetForcePasswordChangeParams{
-ID: u.ID, ForcePasswordChange: true,
-})
+		ID: u.ID, ForcePasswordChange: true,
+	})
 }
 
 // CountAdminUsers DB error → propagated.
@@ -276,13 +277,13 @@ func TestBootstrapDefaultClient_HTTPRedirectInProduction(t *testing.T) {
 func TestBootstrapDefaultClient_Success(t *testing.T) {
 	cfg := validClientCfg()
 	c := sampleRepoClient()
-	secretHash := hashClientSecret(cfg.DefaultClientSecret)
+	secretHash := util.SHA256Hex(cfg.DefaultClientSecret)
 	isActive := true
 
 	q := &mocks.MockQuerier{}
 	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
 	q.On("CreateClient", mock.Anything, mock.MatchedBy(func(p repository.CreateClientParams) bool {
-return p.Name == cfg.DefaultClientName &&
+		return p.Name == cfg.DefaultClientName &&
 			p.ClientSecretHash == secretHash &&
 			p.IsActive != nil && *p.IsActive == isActive &&
 			p.IsConfidential == cfg.DefaultClientConfidential
@@ -316,9 +317,9 @@ func TestBootstrapDefaultClient_SecretIsHashed(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
 	q.On("CreateClient", mock.Anything, mock.MatchedBy(func(p repository.CreateClientParams) bool {
-// Stored hash must NOT equal the plain-text secret.
-return p.ClientSecretHash != cfg.DefaultClientSecret
-})).Return(c, nil)
+		// Stored hash must NOT equal the plain-text secret.
+		return p.ClientSecretHash != cfg.DefaultClientSecret
+	})).Return(c, nil)
 	q.On("CreateAuditLogEntry", mock.Anything, mock.Anything).Return(uuid.New(), nil)
 
 	auditSvc := audit.New(q)

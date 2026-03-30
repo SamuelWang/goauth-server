@@ -7,9 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
@@ -198,9 +196,8 @@ func (s *Service) ExchangeCodeForToken(
 	if client.IsActive == nil || !*client.IsActive {
 		return nil, ErrClientInactive
 	}
-	h := sha256.Sum256([]byte(clientSecret))
-	supplied := hex.EncodeToString(h[:])
-	if subtle.ConstantTimeCompare([]byte(client.ClientSecretHash), []byte(supplied)) != 1 {
+	h := util.SHA256Hex(clientSecret)
+	if subtle.ConstantTimeCompare([]byte(client.ClientSecretHash), []byte(h)) != 1 {
 		return nil, ErrInvalidClientSecret
 	}
 
@@ -248,7 +245,7 @@ func (s *Service) ExchangeCodeForToken(
 	}
 
 	// 7. Store the token hash for revocation lookup.
-	tokenHash := hashToken(tokenString)
+	tokenHash := util.SHA256Hex(tokenString)
 	expiresAt := time.Now().Add(s.Expiry())
 	_, err = s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: tokenHash,
@@ -288,7 +285,7 @@ func (s *Service) RevokeToken(ctx context.Context, tokenHash string) error {
 // RevokeRawToken hashes rawToken and revokes it. This is a convenience wrapper
 // for callers (e.g. the logout handler) that hold the plain token string.
 func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
-	return s.RevokeToken(ctx, hashToken(rawToken))
+	return s.RevokeToken(ctx, util.SHA256Hex(rawToken))
 }
 
 // IsTokenRevoked reports whether the raw access token has been revoked or is
@@ -297,7 +294,7 @@ func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
 // If the token record is not found in the database it is treated as invalid
 // and (true, nil) is returned.
 func (s *Service) IsTokenRevoked(ctx context.Context, rawToken string) (bool, error) {
-	record, err := s.repo.GetAccessToken(ctx, hashToken(rawToken))
+	record, err := s.repo.GetAccessToken(ctx, util.SHA256Hex(rawToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return true, nil
