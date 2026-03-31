@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/mail"
 	"net/url"
 	"os"
@@ -87,6 +88,12 @@ type SecurityConfig struct {
 	// In production an empty list means no cross-origin requests are allowed.
 	// In non-production environments an empty list enables the wildcard (*) fallback.
 	CORSAllowedOrigins []string
+
+	// MetricsAllowedCIDRs is the list of CIDRs whose source IPs are permitted
+	// to access the /metrics endpoint. Parsed from METRICS_ALLOWED_CIDRS
+	// (comma-separated, e.g. "10.0.0.0/8,172.16.0.0/12").
+	// When empty, the endpoint is open to all callers.
+	MetricsAllowedCIDRs []string
 }
 
 func Load() (*Config, error) {
@@ -118,6 +125,7 @@ func Load() (*Config, error) {
 			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
 			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
 			CORSAllowedOrigins:    getEnvAsStringSlice("CORS_ALLOWED_ORIGINS"),
+			MetricsAllowedCIDRs:   getEnvAsStringSlice("METRICS_ALLOWED_CIDRS"),
 		},
 		Bootstrap: BootstrapConfig{
 			AllowDefaultAdmin:         getEnvAsBool("ALLOW_DEFAULT_ADMIN", false),
@@ -179,6 +187,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.Security.SessionSigningKey == "" {
 		return nil, fmt.Errorf("SESSION_SIGNING_KEY is required")
+	}
+
+	for _, cidr := range cfg.Security.MetricsAllowedCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return nil, fmt.Errorf("METRICS_ALLOWED_CIDRS contains an invalid CIDR %q: %w", cidr, err)
+		}
 	}
 
 	// Validate BootstrapConfig fields that carry user-supplied values.

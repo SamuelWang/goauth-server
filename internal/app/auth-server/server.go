@@ -90,7 +90,7 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	// Register routes
 	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService, auditService)
 	web.RegisterRoutes(r, cfg, authService)
-	ops.RegisterRoutes(r)
+	ops.RegisterRoutes(r, cfg)
 
 	s := &Server{
 		router: r,
