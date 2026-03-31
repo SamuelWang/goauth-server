@@ -26,6 +26,8 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 		// Force-password-change exchange: 10 requests per minute per IP.
 		// The challenge token is the credential; no Authorization header needed.
 		publicAuth.POST("/change-password", middleware.RateLimitByIP(middleware.LoginRatePerMin, middleware.LoginRatePerMin), h.ChangePassword)
+		// RFC 7009 token revocation: caller authenticates via HTTP Basic or Bearer.
+		publicAuth.POST("/revoke", middleware.RateLimitByIP(middleware.TokenRatePerMin, middleware.TokenRatePerMin), h.Revoke)
 	}
 
 	// Public client-scoped routes

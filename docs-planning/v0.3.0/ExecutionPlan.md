@@ -875,10 +875,10 @@ Handler logic:
 6. Return `200 OK` in all cases (including token not found), per RFC 7009.
 
 **Acceptance Criteria:**
-- [ ] Unknown token returns `200 OK` (not an error)
-- [ ] Valid refresh token is revoked; linked access token also revoked
-- [ ] Valid access token-only revocation works
-- [ ] Unauthenticated request returns `401` (the only error RFC 7009 specifies)
+- [x] Unknown token returns `200 OK` (not an error)
+- [x] Valid refresh token is revoked; linked access token also revoked
+- [x] Valid access token-only revocation works
+- [x] Unauthenticated request returns `401` (the only error RFC 7009 specifies)
 
 #### Sub-task 8.5 — Wire refresh token revocation into sensitive events
 
