@@ -847,9 +847,9 @@ Inside `RotateRefreshToken` (called from 8.2 when `record.IsRevoked == true`):
 4. Return `ErrInvalidGrant`.
 
 **Acceptance Criteria:**
-- [ ] All tokens in the family are revoked in a single DB statement
-- [ ] Both audit events written
-- [ ] Subsequent use of any token in the same family also triggers replay detection (because all are now `is_revoked=true`)
+- [x] All tokens in the family are revoked in a single DB statement
+- [x] Both audit events written
+- [x] Subsequent use of any token in the same family also triggers replay detection (because all are now `is_revoked=true`)
 
 #### Sub-task 8.4 — Implement `POST /api/v1/auth/revoke` (RFC 7009)
 
