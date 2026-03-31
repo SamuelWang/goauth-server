@@ -76,6 +76,13 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, newPassw
 		return nil, fmt.Errorf("clearing force_password_change: %w", err)
 	}
 
+	// Revoke all existing refresh tokens so the old session cannot be resumed.
+	reason := "password_change"
+	_ = s.repo.RevokeRefreshTokensByUser(ctx, repository.RevokeRefreshTokensByUserParams{
+		UserID:       userID,
+		RevokeReason: &reason,
+	})
+
 	if s.auditSvc != nil {
 		uid := userID
 		_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{

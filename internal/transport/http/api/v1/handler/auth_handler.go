@@ -231,6 +231,17 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 		}
 	}
 
+	// Also revoke all refresh tokens belonging to the user so they cannot be
+	// rotated after logout. Non-fatal: a failure is logged but does not block
+	// the logout response.
+	if userIDStr := c.GetString("user_id"); userIDStr != "" {
+		if userUUID, err := uuid.Parse(userIDStr); err == nil {
+			if err := h.authService.RevokeUserRefreshTokens(c.Request.Context(), userUUID, "logout"); err != nil {
+				log.Printf("Logout: failed to revoke refresh tokens: %v", err)
+			}
+		}
+	}
+
 	c.SetCookie("access_token", "", -1, "/", "", getCookieSecure(c), true)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }

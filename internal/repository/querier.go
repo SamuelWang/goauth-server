@@ -82,6 +82,7 @@ type Querier interface {
 	MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) error
 	RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefreshTokenFamilyParams) error
+	RevokeRefreshTokensByUser(ctx context.Context, arg RevokeRefreshTokensByUserParams) error
 
 	// audit_log
 	CountAuditLogEntries(ctx context.Context, arg CountAuditLogEntriesParams) (int64, error)

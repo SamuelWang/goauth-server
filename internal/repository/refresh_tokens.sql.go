@@ -235,3 +235,19 @@ func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefres
 	_, err := q.db.Exec(ctx, revokeRefreshTokenFamily, arg.TokenFamilyID, arg.RevokeReason)
 	return err
 }
+
+const revokeRefreshTokensByUser = `-- name: RevokeRefreshTokensByUser :exec
+UPDATE refresh_tokens
+SET is_revoked = true, revoked_at = now(), revoke_reason = $2
+WHERE user_id = $1 AND is_revoked = false
+`
+
+type RevokeRefreshTokensByUserParams struct {
+	UserID       uuid.UUID
+	RevokeReason *string
+}
+
+func (q *Queries) RevokeRefreshTokensByUser(ctx context.Context, arg RevokeRefreshTokensByUserParams) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokensByUser, arg.UserID, arg.RevokeReason)
+	return err
+}

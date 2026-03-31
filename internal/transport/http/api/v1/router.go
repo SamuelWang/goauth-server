@@ -72,6 +72,7 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 		usersGroup.GET("", h.ListUsers)
 		usersGroup.PATCH("/:id", h.UpdateUserStatus)
 		usersGroup.DELETE("/:id/lockout", h.UnlockUser)
+		usersGroup.DELETE("/:id/sessions", h.RevokeUserSessions)
 	}
 
 	// Session management routes (admin only)

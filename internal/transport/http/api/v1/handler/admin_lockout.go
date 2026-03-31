@@ -60,3 +60,60 @@ func (h *ApiV1Handler) UnlockUser(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// RevokeUserSessions handles DELETE /api/v1/admin/users/:id/sessions — revokes
+// all active refresh tokens for the specified user. Admin only.
+//
+// @Summary     Revoke all sessions for a user
+// @Description Revokes all active refresh tokens belonging to the specified user. Admin only.
+// @Tags        Users
+// @Produce     json
+// @Param       id   path      string  true  "User UUID"
+// @Success     204
+// @Failure     403  {object}  handler.ErrorResponse
+// @Failure     404  {object}  handler.ErrorResponse
+// @Failure     500  {object}  handler.ErrorResponse
+// @Security    BearerAuth
+// @Router      /api/v1/admin/users/{id}/sessions [delete]
+func (h *ApiV1Handler) RevokeUserSessions(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Verify the user exists before revoking tokens.
+	if _, err := h.userService.GetUser(c.Request.Context(), id); err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		log.Printf("RevokeUserSessions: fetching user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	if err := h.authService.RevokeUserRefreshTokens(c.Request.Context(), id, "admin_revoked"); err != nil {
+		log.Printf("RevokeUserSessions: revoking refresh tokens: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	// Write audit entry for the admin action.
+	if h.auditSvc != nil {
+		var actorID *uuid.UUID
+		if actorIDStr, ok := getUserID(c); ok {
+			if parsed, err := uuid.Parse(actorIDStr); err == nil {
+				actorID = &parsed
+			}
+		}
+		_ = h.auditSvc.LogEvent(c.Request.Context(), audit.AuditEntry{
+			EventType: audit.EventAdminSessionRevoked,
+			UserID:    &id,
+			ActorID:   actorID,
+			Metadata:  map[string]any{"reason": "admin_revoked"},
+		})
+	}
+
+	c.Status(http.StatusNoContent)
+}

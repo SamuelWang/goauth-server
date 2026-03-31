@@ -356,6 +356,11 @@ func (m *MockQuerier) RevokeRefreshTokenFamily(ctx context.Context, arg reposito
 	return args.Error(0)
 }
 
+func (m *MockQuerier) RevokeRefreshTokensByUser(ctx context.Context, arg repository.RevokeRefreshTokensByUserParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
 // Audit log methods added in v0.3.0 (sub-task 1.8)
 
 func (m *MockQuerier) CountAuditLogEntries(ctx context.Context, arg repository.CountAuditLogEntriesParams) (int64, error) {

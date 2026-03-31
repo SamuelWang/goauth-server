@@ -337,6 +337,16 @@ func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
 	return s.RevokeToken(ctx, util.SHA256Hex(rawToken))
 }
 
+// RevokeUserRefreshTokens revokes all active refresh tokens for the given user.
+// reason is recorded on each token row for auditing (e.g. "logout", "password_change").
+// Errors are returned to callers so they may log or ignore them appropriately.
+func (s *Service) RevokeUserRefreshTokens(ctx context.Context, userID uuid.UUID, reason string) error {
+	return s.repo.RevokeRefreshTokensByUser(ctx, repository.RevokeRefreshTokensByUserParams{
+		UserID:       userID,
+		RevokeReason: &reason,
+	})
+}
+
 // IsTokenRevoked reports whether the raw access token has been explicitly
 // revoked in the database. It should be called after JWT signature/expiry
 // validation so the database is only consulted for cryptographically valid tokens.

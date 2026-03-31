@@ -404,6 +404,9 @@ func TestLogout_Success(t *testing.T) {
 	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Once()
 	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Once()
 	env.mockQ.On("RevokeAccessToken", mock.Anything, tokenRow.ID).Return(nil)
+	env.mockQ.On("RevokeRefreshTokensByUser", mock.Anything, mock.MatchedBy(func(arg repository.RevokeRefreshTokensByUserParams) bool {
+		return arg.UserID == userID
+	})).Return(nil)
 
 	w := env.doAuthRequest(http.MethodPost, "/api/v1/auth/logout", nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)

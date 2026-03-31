@@ -899,9 +899,9 @@ WHERE user_id = $1 AND is_revoked = false;
 ```
 
 **Acceptance Criteria:**
-- [ ] Password change revokes all user refresh tokens
-- [ ] Logout revokes all user refresh tokens
-- [ ] Admin session revoke writes `admin_revoked` reason
+- [x] Password change revokes all user refresh tokens
+- [x] Logout revokes all user refresh tokens
+- [x] Admin session revoke writes `admin_revoked` reason
 
 #### Sub-task 8.6 — Optional cleanup endpoint
 
