@@ -67,6 +67,15 @@ type TokenExchangeRequest struct {
 	RedirectURI  string `json:"redirect_uri" binding:"required"`
 }
 
+// RefreshTokenGrantRequest is the request body for POST /api/v1/auth/token
+// when grant_type is "refresh_token".
+type RefreshTokenGrantRequest struct {
+	GrantType    string `json:"grant_type" binding:"required"`
+	RefreshToken string `json:"refresh_token" binding:"required"`
+	ClientID     string `json:"client_id" binding:"required"`
+	ClientSecret string `json:"client_secret" binding:"required"`
+}
+
 // TokenExchangeResponse is the OAuth 2.0 token endpoint response.
 type TokenExchangeResponse struct {
 	AccessToken  string  `json:"access_token"`

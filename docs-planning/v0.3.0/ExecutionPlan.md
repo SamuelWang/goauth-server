@@ -832,10 +832,10 @@ Logic:
 **Handler:** Add `grant_type=refresh_token` case to existing `POST /api/v1/auth/token` handler. Parse `refresh_token` from form body, call `RotateRefreshToken`, map errors to `400 invalid_grant` / `401`.
 
 **Acceptance Criteria:**
-- [ ] New access token is returned on valid rotation
-- [ ] Previous token hash rejected on second use (is_revoked=true after first use)
-- [ ] Wrong client ID returns `400 invalid_grant`
-- [ ] Expired token returns `400 invalid_grant`
+- [x] New access token is returned on valid rotation
+- [x] Previous token hash rejected on second use (is_revoked=true after first use)
+- [x] Wrong client ID returns `400 invalid_grant`
+- [x] Expired token returns `400 invalid_grant`
 
 #### Sub-task 8.3 — Implement replay detection
 
