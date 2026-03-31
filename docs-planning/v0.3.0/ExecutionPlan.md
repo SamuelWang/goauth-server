@@ -903,17 +903,6 @@ WHERE user_id = $1 AND is_revoked = false;
 - [x] Logout revokes all user refresh tokens
 - [x] Admin session revoke writes `admin_revoked` reason
 
-#### Sub-task 8.6 — Optional cleanup endpoint
-
-Add `DELETE /ops/maintenance/cleanup-tokens` to the ops router (ops handler under `internal/transport/http/ops/handler/`):
-
-- No auth in non-production; restrict to internal network or add ops secret header in production.
-- Calls `repo.DeleteExpiredRefreshTokens(ctx)` and returns `200` with `{"deleted": <n>}`.
-
-**Acceptance Criteria:**
-- [ ] Endpoint callable and returns count of deleted rows
-- [ ] Does not delete non-expired tokens
-
 ### Task 9 — Tests
 
 **Dependencies:** T1–T8  
