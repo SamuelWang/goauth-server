@@ -12,16 +12,20 @@
 package loadtest_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"text/tabwriter"
@@ -38,6 +42,7 @@ import (
 	usersvc "github.com/SamuelWang/goauth-server/internal/service/user"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
 	v1 "github.com/SamuelWang/goauth-server/internal/transport/http/api/v1"
+	v1handler "github.com/SamuelWang/goauth-server/internal/transport/http/api/v1/handler"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -72,11 +77,13 @@ const (
 
 // loadEnv holds the in-process test server and pre-generated credentials.
 type loadEnv struct {
-	mockQ   *mocks.MockQuerier
-	server  *httptest.Server
-	client  *http.Client
-	authSvc *authsvc.Service
-	privKey *ecdsa.PrivateKey
+	cfg      *config.Config
+	mockQ    *mocks.MockQuerier
+	server   *httptest.Server
+	client   *http.Client
+	authSvc  *authsvc.Service
+	auditSvc *audit.Service
+	privKey  *ecdsa.PrivateKey
 }
 
 // newLoadEnv constructs an in-process httptest.Server backed by a mock
@@ -144,11 +151,13 @@ func newLoadEnv(t *testing.T) *loadEnv {
 	t.Cleanup(srv.Close)
 
 	return &loadEnv{
-		mockQ:   mockQ,
-		server:  srv,
-		client:  srv.Client(),
-		authSvc: as,
-		privKey: privKey,
+		cfg:      cfg,
+		mockQ:    mockQ,
+		server:   srv,
+		client:   srv.Client(),
+		authSvc:  as,
+		auditSvc: auditSvc,
+		privKey:  privKey,
 	}
 }
 
@@ -248,10 +257,63 @@ func runScenario(
 }
 
 // ---------------------------------------------------------------------------
+// Flow scenario runner
+// ---------------------------------------------------------------------------
+
+// runFlowScenario is like runScenario but designed for multi-step VU flows.
+// flow() performs all steps sequentially and returns true on full success.
+// The wall-clock time of each complete VU flow is recorded as one latency sample.
+func runFlowScenario(
+	t *testing.T,
+	_ *http.Client, // kept for signature consistency
+	name string,
+	flow func() bool,
+) *loadResult {
+	t.Helper()
+
+	// Warmup (un-timed).
+	for i := 0; i < loadWarmupReqs; i++ {
+		flow()
+	}
+
+	type sample struct {
+		d   time.Duration
+		err bool
+	}
+	ch := make(chan sample, loadConcurrency*loadReqsPerWorker)
+
+	var wg sync.WaitGroup
+	for w := 0; w < loadConcurrency; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < loadReqsPerWorker; i++ {
+				start := time.Now()
+				ok := flow()
+				d := time.Since(start)
+				ch <- sample{d: d, err: !ok}
+			}
+		}()
+	}
+	wg.Wait()
+	close(ch)
+
+	res := &loadResult{scenario: name}
+	for s := range ch {
+		if s.err {
+			res.errors++
+		} else {
+			res.latencies = append(res.latencies, s.d)
+		}
+	}
+	return res
+}
+
+// ---------------------------------------------------------------------------
 // Test
 // ---------------------------------------------------------------------------
 
-// TestLoad runs three representative load scenarios and asserts that the
+// TestLoad runs four representative load scenarios and asserts that the
 // p95 latency is under the 200 ms SLA target for each.
 //
 //   - Scenario 1 – GET /ops/health: no auth, no DB, baseline overhead only.
@@ -259,6 +321,8 @@ func runScenario(
 //     one mock DB call (list enabled providers).
 //   - Scenario 3 – GET /api/v1/auth/me: authenticated endpoint; JWT
 //     validation + revocation check + user lookup (two mock DB calls).
+//   - Scenario 4 – Refresh token lifecycle: exchange auth code → access+refresh
+//     tokens, rotate the refresh token 3×, revoke the final refresh token.
 func TestLoad(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping load tests in -short mode")
@@ -320,7 +384,173 @@ func TestLoad(t *testing.T) {
 		Maybe()
 
 	// -----------------------------------------------------------------------
-	// Run all three scenarios.
+	// Scenario 4: Refresh Token Lifecycle.
+	// Client with AllowRefreshTokens=true exchanges an auth code for an
+	// access+refresh token pair, rotates the refresh token three times, and
+	// finally revokes it via POST /api/v1/auth/revoke (RFC 7009).
+	// -----------------------------------------------------------------------
+	rtClientID := uuid.New()
+	const rtClientSecret = "lt-rt-load-test-secret"
+	rtSecretHash := util.SHA256Hex(rtClientSecret)
+	rtIsActive := true
+	rtClient := repository.Client{
+		ID:                 rtClientID,
+		Name:               "Load Test RT Client",
+		ClientSecretHash:   rtSecretHash,
+		RedirectUris:       []string{"http://localhost:3000/callback"},
+		GrantTypes:         []string{"authorization_code", "refresh_token"},
+		IsActive:           &rtIsActive,
+		AllowRefreshTokens: true,
+		IsConfidential:     true,
+	}
+
+	const rtAuthCode = "lt-rt-fixed-auth-code"
+	rtScopeStr := "openid email offline_access"
+	rtCodeID := uuid.New()
+	rtCodeRevoked := false
+	rtAuthCodeRec := repository.AuthorizationCode{
+		ID:          rtCodeID,
+		Code:        rtAuthCode,
+		ClientID:    rtClientID,
+		UserID:      userID,
+		ExpiresAt:   time.Now().Add(30 * time.Minute),
+		RedirectUri: "http://localhost:3000/callback",
+		Scope:       &rtScopeStr,
+		IsRevoked:   &rtCodeRevoked,
+	}
+
+	rtAtID := uuid.New()
+	rtAtRevoked := false
+	rtAtRec := repository.AccessToken{
+		ID:        rtAtID,
+		TokenHash: "lt-rt-at-hash",
+		ClientID:  rtClientID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(time.Hour),
+		IsRevoked: &rtAtRevoked,
+	}
+	rtRec := repository.RefreshToken{
+		ID:            uuid.New(),
+		TokenFamilyID: uuid.New(),
+		TokenHash:     "lt-rt-rt-hash",
+		ClientID:      rtClientID,
+		UserID:        userID,
+		AccessTokenID: rtAtID,
+		Scope:         rtScopeStr,
+		ExpiresAt:     time.Now().Add(30 * 24 * time.Hour),
+		IsRevoked:     false,
+	}
+
+	env.mockQ.On("GetClient", mock.Anything, rtClientID).Return(rtClient, nil).Maybe()
+	env.mockQ.On("GetAuthorizationCode", mock.Anything, rtAuthCode).Return(rtAuthCodeRec, nil).Maybe()
+	env.mockQ.On("MarkAuthorizationCodeUsed", mock.Anything, rtCodeID).Return(rtAuthCodeRec, nil).Maybe()
+	env.mockQ.On("CreateAccessToken", mock.Anything, mock.Anything).Return(rtAtRec, nil).Maybe()
+	env.mockQ.On("CreateRefreshToken", mock.Anything, mock.Anything).Return(rtRec, nil).Maybe()
+	env.mockQ.On("CreateAuditLogEntry", mock.Anything, mock.Anything).Return(uuid.New(), nil).Maybe()
+	env.mockQ.On("GetRefreshTokenByHash", mock.Anything, mock.Anything).Return(rtRec, nil).Maybe()
+	env.mockQ.On("MarkRefreshTokenUsed", mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.mockQ.On("RevokeRefreshToken", mock.Anything, mock.Anything).Return(nil).Maybe()
+	env.mockQ.On("GetAccessTokenByID", mock.Anything, rtAtID).Return(rtAtRec, nil).Maybe()
+	env.mockQ.On("RevokeAccessToken", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	// Build a dedicated httptest.Server for the RT lifecycle scenario.
+	// The token/revoke endpoints on the main server carry a 10 req/min/IP
+	// rate limit that would make the load scenario artificially fail at scale.
+	// This minimal router omits per-IP rate limiting so we measure pure
+	// handler + service-layer latency, consistent with the other scenarios.
+	rtGin := gin.New()
+	rtGin.Use(middleware.MaxBodySizeMiddleware())
+	rtGin.Use(middleware.SecurityHeadersMiddleware("development"))
+	rtApiV1 := rtGin.Group("/api/v1")
+	rtApiV1.Use(middleware.ContextMiddleware(env.cfg))
+	rtH := v1handler.New(env.authSvc, nil, nil, nil, nil, env.auditSvc)
+	rtApiV1.POST("/auth/token", rtH.TokenExchange)
+	rtApiV1.POST("/auth/revoke", rtH.Revoke)
+	rtSrv := httptest.NewServer(rtGin)
+	t.Cleanup(rtSrv.Close)
+	rtSrvClient := rtSrv.Client()
+	rtBase := rtSrv.URL
+
+	// rtFlow is the multi-step VU for scenario 4.  All steps must succeed for
+	// the iteration to be counted as a successful latency sample.
+	rtFlow := func() bool {
+		// Step 1: Exchange the fixed auth code for an access + refresh token.
+		step1Body, _ := json.Marshal(map[string]string{
+			"grant_type":    "authorization_code",
+			"code":          rtAuthCode,
+			"client_id":     rtClientID.String(),
+			"client_secret": rtClientSecret,
+			"redirect_uri":  "http://localhost:3000/callback",
+		})
+		req1, _ := http.NewRequest(http.MethodPost, rtBase+"/api/v1/auth/token", bytes.NewReader(step1Body))
+		req1.Header.Set("Content-Type", "application/json")
+		resp1, err := rtSrvClient.Do(req1)
+		if err != nil || resp1.StatusCode != http.StatusOK {
+			if resp1 != nil {
+				resp1.Body.Close()
+			}
+			return false
+		}
+		var tok1 struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		json.NewDecoder(resp1.Body).Decode(&tok1) //nolint:errcheck
+		resp1.Body.Close()
+		currentRT := tok1.RefreshToken
+		if currentRT == "" {
+			return false
+		}
+
+		// Step 2: Rotate the refresh token three times.
+		for i := 0; i < 3; i++ {
+			rotBody, _ := json.Marshal(map[string]string{
+				"grant_type":    "refresh_token",
+				"refresh_token": currentRT,
+				"client_id":     rtClientID.String(),
+				"client_secret": rtClientSecret,
+			})
+			rotReq, _ := http.NewRequest(http.MethodPost, rtBase+"/api/v1/auth/token", bytes.NewReader(rotBody))
+			rotReq.Header.Set("Content-Type", "application/json")
+			rotResp, err := rtSrvClient.Do(rotReq)
+			if err != nil || rotResp.StatusCode != http.StatusOK {
+				if rotResp != nil {
+					rotResp.Body.Close()
+				}
+				return false
+			}
+			var rotTok struct {
+				RefreshToken string `json:"refresh_token"`
+			}
+			json.NewDecoder(rotResp.Body).Decode(&rotTok) //nolint:errcheck
+			rotResp.Body.Close()
+			currentRT = rotTok.RefreshToken
+			if currentRT == "" {
+				return false
+			}
+		}
+
+		// Step 3: Revoke the final refresh token.
+		formValues := url.Values{
+			"token":           {currentRT},
+			"token_type_hint": {"refresh_token"},
+		}
+		revokeReq, _ := http.NewRequest(http.MethodPost, rtBase+"/api/v1/auth/revoke",
+			strings.NewReader(formValues.Encode()))
+		revokeReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		revokeReq.SetBasicAuth(rtClientID.String(), rtClientSecret)
+		revokeResp, err := rtSrvClient.Do(revokeReq)
+		if err != nil || revokeResp.StatusCode != http.StatusOK {
+			if revokeResp != nil {
+				revokeResp.Body.Close()
+			}
+			return false
+		}
+		revokeResp.Body.Close()
+		return true
+	}
+
+	// -----------------------------------------------------------------------
+	// Run all four scenarios.
 	// -----------------------------------------------------------------------
 	results := []*loadResult{
 		runScenario(t, env.client, "GET /ops/health", http.StatusOK,
@@ -343,6 +573,7 @@ func TestLoad(t *testing.T) {
 				return req
 			},
 		),
+		runFlowScenario(t, env.client, "RT lifecycle (code→tokens, rotate×3, revoke)", rtFlow),
 	}
 
 	// -----------------------------------------------------------------------

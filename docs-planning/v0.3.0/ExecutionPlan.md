@@ -1062,8 +1062,8 @@ In `internal/loadtest/load_test.go`, add a scenario that:
 3. Revokes the final refresh token.
 
 **Acceptance Criteria:**
-- [ ] Load test compiles and runs without errors
-- [ ] Refresh rotation steps included in the VU script
+- [x] Load test compiles and runs without errors
+- [x] Refresh rotation steps included in the VU script
 
 #### Sub-task 9.15 — Full test suite validation
 
@@ -1075,9 +1075,9 @@ go test -race ./...
 Fix any data races or failures. Confirm coverage targets.
 
 **Acceptance Criteria:**
-- [ ] `go test -race ./...` exits 0
-- [ ] Coverage ≥ 80% for all new packages (`audit`, `refresh`, `bootstrap`, `password`)
-- [ ] No pre-existing tests regressed
+- [x] `go test -race ./...` exits 0
+- [x] Coverage ≥ 80% for all new packages (`audit`, `refresh`, `bootstrap`, `password`)
+- [x] No pre-existing tests regressed
 
 ### Task 10 — Documentation
 

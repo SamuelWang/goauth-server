@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+// errDB is a sentinel error representing a database failure, used in rotation
+// error-path tests.
+var errDB = errors.New("database error")
 
 // newTestServiceWithAudit creates a Service with an in-process audit.Service
 // backed by the same MockQuerier. This allows asserting on CreateAuditLogEntry
@@ -400,4 +405,136 @@ func TestExchangeCodeForToken_AllowRefreshTokensFalse(t *testing.T) {
 	assert.Empty(t, resp.RefreshToken, "no refresh token should be issued when AllowRefreshTokens=false")
 	q.AssertExpectations(t)
 	q.AssertNumberOfCalls(t, "CreateRefreshToken", 0)
+}
+
+// TestRotateRefreshToken_MarkUsedError verifies that a DB error from
+// MarkRefreshTokenUsed propagates correctly to the caller.
+func TestRotateRefreshToken_MarkUsedError(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	record := validRefreshToken(clientID, userID)
+	rawToken := "valid-raw-token"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(record, nil)
+	q.On("MarkRefreshTokenUsed", mock.Anything, record.ID).Return(errDB)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "marking refresh token as used")
+	q.AssertExpectations(t)
+}
+
+// TestRotateRefreshToken_GetUserError verifies that a DB error from
+// GetUserByID propagates correctly to the caller.
+func TestRotateRefreshToken_GetUserError(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	record := validRefreshToken(clientID, userID)
+	rawToken := "valid-raw-token-user-err"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(record, nil)
+	q.On("MarkRefreshTokenUsed", mock.Anything, record.ID).Return(nil)
+	q.On("GetUserByID", mock.Anything, userID).Return(repository.User{}, errDB)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "getting user")
+	q.AssertExpectations(t)
+}
+
+// TestRotateRefreshToken_CreateAccessTokenError verifies that a DB error from
+// CreateAccessToken propagates correctly to the caller.
+func TestRotateRefreshToken_CreateAccessTokenError(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	record := validRefreshToken(clientID, userID)
+	rawToken := "valid-raw-token-at-err"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	user := sampleUser()
+	user.ID = userID
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(record, nil)
+	q.On("MarkRefreshTokenUsed", mock.Anything, record.ID).Return(nil)
+	q.On("GetUserByID", mock.Anything, userID).Return(user, nil)
+	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(repository.AccessToken{}, errDB)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "storing access token")
+	q.AssertExpectations(t)
+}
+
+// TestRotateRefreshToken_CreateRefreshTokenError verifies that a DB error from
+// CreateRefreshToken propagates correctly to the caller.
+func TestRotateRefreshToken_CreateRefreshTokenError(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	record := validRefreshToken(clientID, userID)
+	rawToken := "valid-raw-token-rt-err"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	user := sampleUser()
+	user.ID = userID
+
+	accessTokenRecord := repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: "access-token-hash",
+		ClientID:  clientID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(60 * time.Minute),
+	}
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(record, nil)
+	q.On("MarkRefreshTokenUsed", mock.Anything, record.ID).Return(nil)
+	q.On("GetUserByID", mock.Anything, userID).Return(user, nil)
+	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(accessTokenRecord, nil)
+	q.On("CreateRefreshToken", mock.Anything, mock.Anything).Return(repository.RefreshToken{}, errDB)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "storing new refresh token")
+	q.AssertExpectations(t)
 }

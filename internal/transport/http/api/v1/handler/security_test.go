@@ -1051,6 +1051,7 @@ func TestSecurity_UnauthenticatedCannotAccessAdminRoutes(t *testing.T) {
 
 // TestSecurity_UnsupportedGrantType verifies that unsupported OAuth grant types
 // are rejected (prevents implicit/password/client_credentials grant abuse).
+// Note: "refresh_token" is supported in v0.3.0 and is intentionally excluded.
 func TestSecurity_UnsupportedGrantType(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -1058,7 +1059,6 @@ func TestSecurity_UnsupportedGrantType(t *testing.T) {
 		"implicit",
 		"password",
 		"client_credentials",
-		"refresh_token",
 		"urn:ietf:params:oauth:grant-type:device_code",
 	}
 
