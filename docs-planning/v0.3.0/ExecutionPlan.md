@@ -1103,12 +1103,12 @@ Revise the Administrator Guide from v0.2.0 to v0.3.0:
 11. **Troubleshooting (§9):** Add entries for lockout-related `429` responses, bootstrap startup failures (invalid email, weak password, invalid redirect URI), and `invalid_grant` on refresh token rotation.
 
 **Acceptance Criteria:**
-- [ ] All 15 new environment variables documented in the correct section
-- [ ] Bootstrap procedure clearly distinguishes dev/staging vs. production usage
-- [ ] Admin unlock endpoint fully documented with example
-- [ ] All 14 audit event types listed in the Audit Log section
-- [ ] SHA-256 migration notice present in the client secret section
-- [ ] Document version header reads `0.3.0`
+- [x] All 15 new environment variables documented in the correct section
+- [x] Bootstrap procedure clearly distinguishes dev/staging vs. production usage
+- [x] Admin unlock endpoint fully documented with example
+- [x] All 14 audit event types listed in the Audit Log section
+- [x] SHA-256 migration notice present in the client secret section
+- [x] Document version header reads `0.3.0`
 
 #### Sub-task 10.2 — Update `docs/ClientIntegrationGuide.md`
 
@@ -1146,13 +1146,13 @@ Revise the Client Integration Guide from v0.2.0 to v0.3.0:
 9. **Error Handling:** Add `grant_type=refresh_token` error codes (`invalid_grant` for expired/revoked/replayed tokens, `invalid_client` for client mismatch) to the error table.
 
 **Acceptance Criteria:**
-- [ ] `POST /api/v1/auth/login` fully documented with all response variants
-- [ ] Password complexity policy table present and matches SRS
-- [ ] Refresh token grant documented end-to-end
-- [ ] Replay detection behaviour explained
-- [ ] `POST /api/v1/auth/revoke` documented with all authentication options
-- [ ] Code examples updated for at least TypeScript and Python
-- [ ] Document version header reads `0.3.0`
+- [x] `POST /api/v1/auth/login` fully documented with all response variants
+- [x] Password complexity policy table present and matches SRS
+- [x] Refresh token grant documented end-to-end
+- [x] Replay detection behaviour explained
+- [x] `POST /api/v1/auth/revoke` documented with all authentication options
+- [x] Code examples updated for at least TypeScript and Python
+- [x] Document version header reads `0.3.0`
 
 #### Sub-task 10.3 — Update `docs/DatabaseDocumentation.md`
 
@@ -1169,10 +1169,10 @@ Revise the Database Documentation from v0.2.0 to v0.3.0:
 9. **Queries section:** Add subsections for `refresh_tokens.sql` (9 queries) and `audit_log.sql` (3 queries). Update `users.sql` and `clients.sql` subsections to document new queries.
 
 **Acceptance Criteria:**
-- [ ] ERD reflects all new tables and columns
-- [ ] All new columns fully documented with types and constraints
-- [ ] All four new migrations in the Migration History table
-- [ ] `refresh_tokens` and `audit_log` query lists match the implemented SQL files
+- [x] ERD reflects all new tables and columns
+- [x] All new columns fully documented with types and constraints
+- [x] All four new migrations in the Migration History table
+- [x] `refresh_tokens` and `audit_log` query lists match the implemented SQL files
 
 #### Sub-task 10.4 — Update `docs/ServiceLayerDocumentation.md`
 
@@ -1192,10 +1192,10 @@ Revise the Service Layer Documentation from v0.2.0 to v0.3.0:
 7. **Testing (§8):** Add a note that `audit.Service` tests use the mock `Querier`, and that the mock was extended in T1.10 to cover all new query methods.
 
 **Acceptance Criteria:**
-- [ ] All new `auth.Service` methods documented with signatures and behaviour
-- [ ] Audit package fully documented including all 15 event type constants
-- [ ] Client secret hashing change clearly noted with the new comparison approach
-- [ ] Architecture diagram updated to include `audit.Service`
+- [x] All new `auth.Service` methods documented with signatures and behaviour
+- [x] Audit package fully documented including all 15 event type constants
+- [x] Client secret hashing change clearly noted with the new comparison approach
+- [x] Architecture diagram updated to include `audit.Service`
 
 #### Sub-task 10.5 — Create `docs/FrontendIntegrationGuide.md`
 
@@ -1276,13 +1276,13 @@ Create a new Frontend Integration Guide targeted at web and mobile frontend deve
     - An `AuthClient` class wiring all four functions together with an interceptor that auto-refreshes on `401`.
 
 **Acceptance Criteria:**
-- [ ] New file `docs/FrontendIntegrationGuide.md` created at version `0.3.0`
-- [ ] All six auth endpoints used by frontends documented (`/login`, `/change-password`, `/token`, `/revoke`, and Authorization Code endpoints)
-- [ ] Mermaid flow diagram present in §2
-- [ ] Error reference table covers all eight error cases
-- [ ] TypeScript code examples present for all four helper functions and the `AuthClient` class
-- [ ] Security best practices section explicitly warns against `localStorage` token storage
-- [ ] Document cross-references `ClientIntegrationGuide.md` for OAuth Authorization Code Flow detail
+- [x] New file `docs/FrontendIntegrationGuide.md` created at version `0.3.0`
+- [x] All six auth endpoints used by frontends documented (`/login`, `/change-password`, `/token`, `/revoke`, and Authorization Code endpoints)
+- [x] Mermaid flow diagram present in §2
+- [x] Error reference table covers all eight error cases
+- [x] TypeScript code examples present for all four helper functions and the `AuthClient` class
+- [x] Security best practices section explicitly warns against `localStorage` token storage
+- [x] Document cross-references `ClientIntegrationGuide.md` for OAuth Authorization Code Flow detail
 
 ## 3. Task Tracing
 

@@ -1,5 +1,7 @@
 # Service Layer Documentation
 
+**Version:** 0.3.0  
+**Updated:** April 1, 2026  
 **Location:** `internal/service/`  
 **Language:** Go 1.24
 
@@ -11,33 +13,40 @@
    - [Types](#auth-types)
    - [Constructor](#auth-constructor)
    - [Authorization Flow](#authorization-flow)
+   - [Direct Login Flow](#direct-login-flow)
+   - [Force Password Change](#force-password-change)
    - [Token Operations](#token-operations)
    - [Legacy Google OIDC Flow](#legacy-google-oidc-flow)
    - [Sentinel Errors](#auth-sentinel-errors)
-4. [Client Service](#client-service)
+4. [Audit Service](#audit-service)
+   - [Types](#audit-types)
+   - [Constructor](#audit-constructor)
+   - [Methods](#audit-methods)
+   - [Event Types](#audit-event-types)
+5. [Client Service](#client-service)
    - [Types](#client-types)
    - [Constructor](#client-constructor)
    - [Methods](#client-methods)
    - [Validation](#client-validation)
    - [Sentinel Errors](#client-sentinel-errors)
-5. [Provider Service](#provider-service)
+6. [Provider Service](#provider-service)
    - [Types](#provider-types)
    - [Constructor](#provider-constructor)
    - [Methods](#provider-methods)
    - [Encryption](#provider-encryption)
    - [Validation](#provider-validation)
    - [Sentinel Errors](#provider-sentinel-errors)
-6. [Session Service](#session-service)
+7. [Session Service](#session-service)
    - [Types](#session-types)
    - [Constructor](#session-constructor)
    - [Methods](#session-methods)
    - [Sentinel Errors](#session-sentinel-errors)
-7. [User Service](#user-service)
+8. [User Service](#user-service)
    - [Types](#user-types)
    - [Constructor](#user-constructor)
    - [Methods](#user-methods)
    - [Sentinel Errors](#user-sentinel-errors)
-8. [Testing](#testing)
+9. [Testing](#testing)
 
 ---
 
@@ -56,20 +65,53 @@ transport/http/
       │
       ▼
 ┌─────────────────────────────────────────────────────┐
+│                    Service Layer                    │
+│                                                     │
+│  ┌──────────────┐    ┌──────────────────┐           │
+│  │ auth.Service │──▶│provider.Svc      │           │
+│  │              │    │(providerServicer)│           │
+│  └──────┬───────┘    └──────┬───────────┘           │
+│         │                   │                       │
+│  ┌──────▼───────┐    ┌──────▼───────┐               │
+│  │client.Service│    │session.Svc   │               │
+│  └──────┬───────┘    └──────┬───────┘               │
+│         │                   │                       │
+│  ┌──────▼───────────────────▼──────┐                │
+│  │           user.Service          │                │
+│  └──────────────────┬──────────────┘                │
+└─────────────────────┼───────────────────────────────┘
+                      │
+                      ▼
+              repository.Querier
+                      │
+                      ▼
+                  PostgreSQL
+```
+
+`auth.Service` depends on `provider.Service` through the narrow `providerServicer` interface and on `audit.Service` for emitting security events. Both dependencies are optional (may be `nil` in tests or minimal deployments).
+
+In v0.3.0 `audit.Service` is also injected into `client.Service` (for `RegenerateSecret` audit events). The `audit.Service` itself has no external dependencies beyond `repository.Querier`.
+
+```
+transport/http/
+      │
+      ▼
+┌─────────────────────────────────────────────────────┐
 │                    Service Layer                     │
 │                                                     │
 │  ┌──────────────┐   ┌──────────────┐               │
 │  │ auth.Service │──▶│provider.Svc  │               │
-│  │              │   │(providerServicer)│            │
+│  │   (+audit)   │   │(providerServicer)│            │
 │  └──────┬───────┘   └──────┬───────┘               │
 │         │                  │                        │
 │  ┌──────▼───────┐   ┌──────▼───────┐               │
 │  │client.Service│   │session.Svc   │               │
-│  └──────┬───────┘   └──────┬───────┘               │
-│         │                  │                        │
-│  ┌──────▼───────────────────▼──────┐               │
-│  │           user.Service           │               │
-│  └──────────────────┬──────────────┘               │
+│  │   (+audit)   │   └──────┬───────┘               │
+│  └──────┬───────┘          │                        │
+│         │    ┌─────────────┘                        │
+│  ┌──────▼────▼──────────────────────┐              │
+│  │   audit.Service  │  user.Service  │              │
+│  └──────────────────┴───────────────┘              │
 └─────────────────────┼───────────────────────────────┘
                        │
                        ▼
@@ -78,8 +120,6 @@ transport/http/
                        ▼
                   PostgreSQL
 ```
-
-`auth.Service` depends on `provider.Service` through the narrow `providerServicer` interface, keeping the two packages decoupled.
 
 ---
 
@@ -99,6 +139,7 @@ type Service struct {
     publicKey   *ecdsa.PublicKey
     repo        repository.Querier
     providerSvc providerServicer
+    auditSvc    *audit.Service
 }
 ```
 
@@ -120,14 +161,15 @@ JWT claims payload embedded in every issued access token.
 
 ```go
 type TokenResponse struct {
-    AccessToken string
-    TokenType   string
-    ExpiresIn   int64  // seconds until expiry
-    Scope       *string
+    AccessToken  string
+    TokenType    string
+    ExpiresIn    int64   // seconds until expiry
+    Scope        *string
+    RefreshToken string  // non-empty when a refresh token was issued
 }
 ```
 
-Returned by `ExchangeCodeForToken` to the client after a successful token exchange.
+Returned by `ExchangeCodeForToken` and `RotateRefreshToken`. `RefreshToken` is populated only when the client has `allow_refresh_tokens = true` and the granted scope includes `offline_access`.
 
 #### `ProviderUserInfo`
 
@@ -192,13 +234,14 @@ The narrow interface that `auth.Service` uses to look up provider credentials. `
 
 ```go
 func New(
-    repo repository.Querier,
-    cfg *config.Config,
+    repo      repository.Querier,
+    cfg       *config.Config,
     providerSvc providerServicer,
+    auditSvc *audit.Service,
 ) (*Service, error)
 ```
 
-Parses PEM-encoded ECDSA keys from `cfg.AccessToken.PrivateKey` and `cfg.AccessToken.PublicKey`, then returns a fully initialized `*Service`. Returns an error if either key cannot be parsed.
+Parses PEM-encoded ECDSA keys from `cfg.AccessToken.PrivateKey` and `cfg.AccessToken.PublicKey`, then returns a fully initialized `*Service`. `auditSvc` may be `nil`; when provided, security events (failed logins, lockouts, token operations) are written to the audit log. Returns an error if either key cannot be parsed.
 
 ---
 
@@ -271,7 +314,7 @@ func (s *Service) ExchangeCodeForToken(
 ) (*TokenResponse, error)
 ```
 
-Validates the authorization code against the database, verifies that it has not expired, been used, or been revoked, checks that `clientID` and `redirectURI` match what was recorded at issuance, verifies the client secret with bcrypt, marks the code as used, generates a signed JWT, stores a SHA-256 hash of the token in the database for revocation support, and returns a `*TokenResponse`.
+Validates the authorization code against the database, verifies it has not expired, been used, or been revoked, checks that `clientID` and `redirectURI` match what was recorded at issuance, verifies the client secret with **SHA-256 constant-time comparison**, marks the code as used, generates a signed JWT, stores its SHA-256 hash for revocation support. In v0.3.0, a refresh token is also issued when `client.allow_refresh_tokens = true` and the granted scope contains `offline_access`; the raw token value is included in the returned `TokenResponse.RefreshToken`.
 
 | Error | Condition |
 |-------|-----------|
@@ -281,7 +324,7 @@ Validates the authorization code against the database, verifies that it has not 
 | `ErrCodeRevoked` | Code has been explicitly revoked |
 | `ErrCodeClientMismatch` | Code was issued for a different client |
 | `ErrCodeRedirectMismatch` | `redirectURI` does not match what was recorded |
-| `ErrInvalidClientSecret` | Bcrypt comparison of the client secret failed |
+| `ErrInvalidClientSecret` | SHA-256 constant-time comparison of the client secret failed |
 
 #### `RevokeToken`
 
@@ -329,7 +372,7 @@ Returns the configured access token lifetime as a `time.Duration`.
 | `ErrClientInactive` | Client is deactivated |
 | `ErrProviderDisabled` | OAuth provider is disabled for this client |
 | `ErrInvalidRedirectURI` | Redirect URI is not registered for the client |
-| `ErrInvalidClientSecret` | Client secret did not match the stored hash |
+| `ErrInvalidClientSecret` | Client secret did not match the stored SHA-256 hash |
 | `ErrCodeNotFound` | Authorization code does not exist in the database |
 | `ErrCodeExpired` | Authorization code has passed its expiry time |
 | `ErrCodeUsed` | Authorization code has already been exchanged |
@@ -337,6 +380,84 @@ Returns the configured access token lifetime as a `time.Duration`.
 | `ErrCodeClientMismatch` | Authorization code was issued for a different client |
 | `ErrCodeRedirectMismatch` | Redirect URI does not match the one used at issuance |
 | `ErrTokenNotFound` | Access token not found during revocation |
+| `ErrAccountLocked` | User account is within an active lockout window |
+| `ErrInvalidCredentials` | Email not found, missing password hash, or wrong password |
+| `ErrInvalidGrant` | Invalid or replayed refresh token |
+| `ErrTokenExpired` | Refresh token has passed its expiry timestamp |
+| `ErrForcePasswordChangeSatisfied` | Force-password-change flag is already cleared |
+| `ErrUserNotFound` | User referenced in a change-password challenge does not exist |
+
+---
+
+## Audit Service
+
+**Package:** `audit`  
+**Location:** `internal/service/audit/`
+
+The `audit.Service` is a lightweight, append-only event log. It is injected into `auth.Service` and `client.Service` to record security-significant actions without blocking the primary operation. All event writing is best-effort: if `LogEvent` returns an error it is logged at `WARN` level but the caller continues normally.
+
+### Audit Types
+
+#### `AuditEntry`
+
+```go
+type AuditEntry struct {
+    EventType EventType
+    UserID    *uuid.UUID  // nil when no user is involved
+    ClientID  *uuid.UUID  // nil when no client is involved
+    ActorID   *uuid.UUID  // nil when the actor is the system itself
+    IPAddress *string     // nil when source IP is unavailable
+    Metadata  map[string]any // must NOT contain secrets; serialized to JSONB
+}
+```
+
+---
+
+### Audit Constructor
+
+#### `New`
+
+```go
+func New(repo repository.Querier) *Service
+```
+
+Returns a `*Service` backed by the given `Querier`.
+
+---
+
+### Audit Methods
+
+#### `LogEvent`
+
+```go
+func (s *Service) LogEvent(ctx context.Context, entry AuditEntry) error
+```
+
+Marshals `entry.Metadata` to JSON (defaulting to `{}` when `nil`), then calls `CreateAuditLogEntry`. DB errors are logged at `WARN` level and returned to the caller; callers treat them as non-blocking.
+
+---
+
+### Audit Event Types
+
+`EventType` is a typed string constant defined in `internal/service/audit/events.go`.
+
+| Constant | String Value | Emitted By |
+|---|---|---|
+| `EventDefaultAdminCreated` | `default_admin_created` | Bootstrap service |
+| `EventDefaultClientCreated` | `default_client_created` | Bootstrap service |
+| `EventUserPasswordChanged` | `user_password_changed` | `auth.ChangePassword` |
+| `EventForcePasswordChangeSatisfied` | `force_password_change_satisfied` | `auth.ChangePassword` |
+| `EventRefreshTokenIssued` | `refresh_token_issued` | `auth.ExchangeCodeForToken` |
+| `EventRefreshTokenRotated` | `refresh_token_rotated` | `auth.RotateRefreshToken` |
+| `EventRefreshTokenRevoked` | `refresh_token_revoked` | `auth.RevokeToken` (refresh path) |
+| `EventRefreshTokenFamilyRevoked` | `refresh_token_family_revoked` | `auth.RotateRefreshToken` (replay) |
+| `EventReplayDetected` | `replay_detected` | `auth.RotateRefreshToken` |
+| `EventAccessTokenRevoked` | `access_token_revoked` | `auth.RevokeToken` |
+| `EventAdminSessionRevoked` | `admin_session_revoked` | `session.RevokeUserSessions` / `RevokeClientSessions` |
+| `EventLoginFailed` | `login_failed` | `auth.VerifyCredentials` |
+| `EventAccountLocked` | `account_locked` | `auth.VerifyCredentials` |
+| `EventAccountUnlocked` | `account_unlocked` | `user.UnlockUser` |
+| `EventClientSecretRegenerated` | `client_secret_regenerated` | `client.RegenerateSecret` |
 
 ---
 
@@ -432,12 +553,13 @@ Paginated result returned by `ListClients`. `Total` reflects the count across al
 
 ```go
 type Service struct {
-    repo repository.Querier
-    env  string
+    repo     repository.Querier
+    auditSvc *audit.Service
+    env      string
 }
 ```
 
-`env` is the deployment environment string (e.g. `"production"`, `"development"`). Redirect URI validation enforces HTTPS only when `env == "production"`.
+`env` is the deployment environment string (e.g. `"production"`, `"development"`). Redirect URI validation enforces HTTPS only when `env == "production"`. `auditSvc` may be `nil`; when non-nil, `client_secret_regenerated` events are written.
 
 ---
 
@@ -446,10 +568,10 @@ type Service struct {
 #### `New`
 
 ```go
-func New(repo repository.Querier, env string) *Service
+func New(repo repository.Querier, env string, auditSvc *audit.Service) *Service
 ```
 
-Returns a `*Service`. `env` controls whether redirect URI validation requires HTTPS.
+Returns a `*Service`. `env` controls whether redirect URI validation requires HTTPS. `auditSvc` may be `nil`.
 
 ---
 
@@ -481,7 +603,7 @@ func (s *Service) CreateClient(
 ) (*ClientWithSecret, error)
 ```
 
-Validates the DTO, generates a random base64url client secret, hashes it with bcrypt, and inserts the client record. The returned `ClientWithSecret.PlainSecret` is the only opportunity to retrieve the plaintext secret.
+Validates the DTO, generates a random 32-byte client secret, hashes it with **SHA-256**, and inserts the client record. The returned `ClientWithSecret.PlainSecret` is the only opportunity to retrieve the plaintext secret.
 
 | Error | Condition |
 |-------|-----------|
@@ -502,7 +624,7 @@ Validates the DTO and updates the client's mutable fields. Returns `ErrClientNot
 func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWithSecret, error)
 ```
 
-Generates a new random client secret, hashes it, persists the hash, and returns a `*ClientWithSecret` containing the plaintext secret. Returns `ErrClientNotFound` if the client does not exist.
+Generates a new random 32-byte client secret, hashes it with **SHA-256**, persists the hash, emits a `client_secret_regenerated` audit event (when `auditSvc != nil`), and returns a `*ClientWithSecret` containing the plaintext secret. Returns `ErrClientNotFound` if the client does not exist.
 
 #### `DeleteClient`
 
@@ -511,6 +633,16 @@ func (s *Service) DeleteClient(ctx context.Context, id uuid.UUID) error
 ```
 
 Soft-deletes the client by setting `is_active = false`. Returns `ErrClientNotFound` if the client does not exist.
+
+---
+
+### `ValidateClientSecret` (package-level)
+
+```go
+func ValidateClientSecret(storedHash, suppliedSecret string) bool
+```
+
+Reports whether `suppliedSecret` matches `storedHash` by computing `SHA256Hex(suppliedSecret)` and performing a constant-time byte comparison. This is a package-level helper used by callers that have already loaded the client but do not need a full service method round-trip.
 
 ---
 
@@ -1091,7 +1223,7 @@ Returns `true` if the user's `is_admin` field is explicitly `true`. A `nil` data
 
 ## Testing
 
-All service packages use table-driven unit tests and mock injection via `testutil/mocks/MockQuerier` (generated from `repository.Querier`).
+All service packages use table-driven unit tests and mock injection via `testutil/mocks/MockQuerier` (generated from `repository.Querier`). In v0.3.0 the `MockQuerier` was extended with the following additional methods: `GetUserByEmailForAuth`, `UpdatePasswordHash`, `SetForcePasswordChange`, `IncrementFailedLoginAttempts`, `LockUserAccount`, `ResetLoginAttempts`, `UnlockUserAccount`, `CountAdminUsers`, `CreateRefreshToken`, `GetRefreshTokenByHash`, `GetRefreshTokenByID`, `ListRefreshTokensByUser`, `CountRefreshTokensByUser`, `RevokeRefreshToken`, `RevokeRefreshTokenFamily`, `MarkRefreshTokenUsed`, `RevokeRefreshTokensByUser`, `DeleteExpiredRefreshTokens`, `CreateAuditLogEntry`, `ListAuditLogEntries`, `CountAuditLogEntries`.
 
 ### Auth Service Tests (`auth_test.go`)
 
@@ -1119,6 +1251,16 @@ All service packages use table-driven unit tests and mock injection via `testuti
 | `TestHandleProviderCallback_ClientInactive` | Returns `ErrClientInactive` |
 | `TestGetGoogleLoginURL_Enabled` / `_Disabled` | Legacy Google flow URL generation |
 | `TestHandleGoogleCallback_Disabled` | Returns error when Google OAuth is unconfigured |
+| `TestVerifyCredentials_Success` | Happy-path login with `force_password_change = false` |
+| `TestVerifyCredentials_ForcePasswordChange` | Returns `ForcePasswordChange = true` in result |
+| `TestVerifyCredentials_AccountLocked` | Returns `ErrAccountLocked` with `LockedUntil` populated |
+| `TestVerifyCredentials_InvalidCredentials` | Wrong password increments counter |
+| `TestVerifyCredentials_LockTriggered` | Lockout triggered after max attempts within window |
+| `TestRotateRefreshToken_Success` | Issues new access + refresh tokens |
+| `TestRotateRefreshToken_ReplayDetected` | Revokes family and returns `ErrInvalidGrant` |
+| `TestRotateRefreshToken_Expired` | Returns `ErrTokenExpired` |
+| `TestChangePassword_Success` | Updates hash, clears flag, revokes refresh tokens |
+| `TestChangePassword_AlreadySatisfied` | Returns `ErrForcePasswordChangeSatisfied` |
 
 ### Client Service Tests (`client_test.go`)
 
@@ -1135,7 +1277,15 @@ All service packages use table-driven unit tests and mock injection via `testuti
 | `TestRegenerateSecret_Success` / `_NotFound` | Secret rotation variants |
 | `TestDeleteClient_Success` / `_NotFound` | Soft-delete variants |
 | `TestGenerateSecret_IsBase64URL` | Secret format check |
-| `TestHashSecret_MatchesPlain` | Bcrypt round-trip verification |
+| `TestHashSecret_MatchesPlain` | SHA-256 hex digest is 64 characters; constant-time compare matches |
+
+### Audit Service Tests (`audit_test.go`)
+
+| Test | Description |
+|------|-------------|
+| `TestLogEvent_Success` | Happy-path: persists entry with marshaled metadata |
+| `TestLogEvent_NilMetadata` | Stores `{}` when `Metadata` is nil |
+| `TestLogEvent_RepoError` | Returns error and logs at WARN; caller continues |
 
 ### Provider Service Tests (`provider_test.go`)
 
