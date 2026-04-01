@@ -977,7 +977,7 @@ In `internal/service/auth/token_test.go`:
 - Access token not accepted by `ValidateChallengeToken`
 
 **Acceptance Criteria:**
-- [ ] All four cases pass
+- [x] All four cases pass
 
 #### Sub-task 9.7 — Service unit tests: refresh token rotation and replay
 
