@@ -931,8 +931,8 @@ In `internal/repository/audit_log_test.go`:
 - `CountAuditLogEntries` matches `ListAuditLogEntries` total
 
 **Acceptance Criteria:**
-- [ ] All four cases pass
-- [ ] JSONB metadata preserved exactly
+- [x] All four cases pass
+- [x] JSONB metadata preserved exactly
 
 #### Sub-task 9.3 — Repository integration tests: updated `users` and `clients` queries
 
