@@ -283,7 +283,7 @@ func (s *Service) ExchangeCodeForToken(
 			ClientID:        clientID,
 			UserID:          user.ID,
 			AccessTokenID:   accessTokenRecord.ID,
-			PreviousTokenID: uuid.Nil,
+			PreviousTokenID: nil,
 			Scope:           grantedScope,
 			ExpiresAt:       rtExpiresAt,
 		})

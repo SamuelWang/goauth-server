@@ -88,11 +88,11 @@ type RefreshToken struct {
 	ClientID        uuid.UUID
 	UserID          uuid.UUID
 	AccessTokenID   uuid.UUID
-	PreviousTokenID uuid.UUID
+	PreviousTokenID *uuid.UUID
 	Scope           string
 	ExpiresAt       time.Time
 	IsRevoked       bool
-	RevokedAt       time.Time
+	RevokedAt       *time.Time
 	RevokeReason    *string
 	UsedAt          *time.Time
 	CreatedAt       time.Time
@@ -121,6 +121,6 @@ type User struct {
 	PasswordHash        *string
 	ForcePasswordChange bool
 	FailedLoginAttempts int32
-	LastFailedLoginAt   time.Time
-	LockedUntil         time.Time
+	LastFailedLoginAt   *time.Time
+	LockedUntil         *time.Time
 }

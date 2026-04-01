@@ -918,8 +918,8 @@ In a new or extended `internal/repository/refresh_tokens_test.go`, write integra
 - `DeleteExpiredRefreshTokens` removes only expired rows
 
 **Acceptance Criteria:**
-- [ ] All four cases pass against a real PostgreSQL instance
-- [ ] Tests are isolated (each test creates its own data, cleans up)
+- [x] All four cases pass against a real PostgreSQL instance
+- [x] Tests are isolated (each test creates its own data, cleans up)
 
 #### Sub-task 9.2 — Repository integration tests: `audit_log`
 

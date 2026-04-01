@@ -49,13 +49,12 @@ func (s *Service) VerifyCredentials(ctx context.Context, email, password, source
 	}
 
 	// 2. Active lockout check.
-	if !user.LockedUntil.IsZero() && user.LockedUntil.After(time.Now()) {
-		lu := user.LockedUntil
-		return &VerifyCredentialsResult{LockedUntil: &lu}, ErrAccountLocked
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		return &VerifyCredentialsResult{LockedUntil: user.LockedUntil}, ErrAccountLocked
 	}
 
 	// 3. Clear any expired lockout before proceeding.
-	if !user.LockedUntil.IsZero() {
+	if user.LockedUntil != nil {
 		if _, err := s.repo.ResetLoginAttempts(ctx, user.ID); err != nil {
 			return nil, fmt.Errorf("resetting expired lockout: %w", err)
 		}
@@ -80,8 +79,8 @@ func (s *Service) VerifyCredentials(ctx context.Context, email, password, source
 		}
 
 		attempts := int(updated.FailedLoginAttempts)
-		withinWindow := !user.LastFailedLoginAt.IsZero() &&
-			time.Since(user.LastFailedLoginAt) <= time.Duration(s.cfg.Lockout.WindowSeconds)*time.Second
+		withinWindow := user.LastFailedLoginAt != nil &&
+			time.Since(*user.LastFailedLoginAt) <= time.Duration(s.cfg.Lockout.WindowSeconds)*time.Second
 
 		if attempts >= s.cfg.Lockout.MaxAttempts && withinWindow {
 			lockedUntil := time.Now().Add(time.Duration(s.cfg.Lockout.DurationSeconds) * time.Second)

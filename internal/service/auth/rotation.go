@@ -136,7 +136,7 @@ func (s *Service) RotateRefreshToken(ctx context.Context, rawToken, clientID, cl
 		ClientID:        cid,
 		UserID:          user.ID,
 		AccessTokenID:   accessTokenRecord.ID,
-		PreviousTokenID: record.ID,
+		PreviousTokenID: &record.ID,
 		Scope:           record.Scope,
 		ExpiresAt:       rtExpiresAt,
 	})

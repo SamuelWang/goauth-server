@@ -45,7 +45,7 @@ type CreateRefreshTokenParams struct {
 	ClientID        uuid.UUID
 	UserID          uuid.UUID
 	AccessTokenID   uuid.UUID
-	PreviousTokenID uuid.UUID
+	PreviousTokenID *uuid.UUID
 	Scope           string
 	ExpiresAt       time.Time
 }
