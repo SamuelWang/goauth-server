@@ -586,3 +586,302 @@ func TestUpdateUserActiveStatus(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestGetUserByEmailForAuth(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("returns default zero values for a new user", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_defaults")
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.Equal(t, user.ID, fetched.ID)
+		assert.Equal(t, user.Email, fetched.Email)
+		assert.Nil(t, fetched.PasswordHash)
+		assert.False(t, fetched.ForcePasswordChange)
+		assert.Equal(t, int32(0), fetched.FailedLoginAttempts)
+		assert.Nil(t, fetched.LastFailedLoginAt)
+		assert.Nil(t, fetched.LockedUntil)
+	})
+
+	t.Run("returns all lockout and force-change fields after update", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_fields")
+
+		// Set a password hash
+		hash := "argon2id$v=19$m=65536,t=3,p=4$somesaltvalue$hashedpasswordvalue"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		// Set force_password_change
+		_, err = queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		// Increment failed attempts
+		_, err = queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.Equal(t, user.ID, fetched.ID)
+		assert.NotNil(t, fetched.PasswordHash)
+		assert.Equal(t, hash, *fetched.PasswordHash)
+		assert.True(t, fetched.ForcePasswordChange)
+		assert.Equal(t, int32(1), fetched.FailedLoginAttempts)
+		assert.NotNil(t, fetched.LastFailedLoginAt)
+		assert.Nil(t, fetched.LockedUntil)
+	})
+
+	t.Run("returns locked_until when account is locked", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_locked")
+
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		_, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.NotNil(t, fetched.LockedUntil)
+		assert.WithinDuration(t, lockedUntil, *fetched.LockedUntil, time.Second)
+	})
+
+	t.Run("returns error for non-existent email", func(t *testing.T) {
+		_, err := queries.GetUserByEmailForAuth(ctx, "nonexistent_auth@example.com")
+		require.Error(t, err)
+	})
+}
+
+func TestAccountLockoutSequence(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("IncrementFailedLoginAttempts increments counter and sets timestamp", func(t *testing.T) {
+		user := createTestUser(t, queries, "incrattempts")
+		assert.Equal(t, int32(0), user.FailedLoginAttempts)
+		assert.Nil(t, user.LastFailedLoginAt)
+
+		updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(1), updated.FailedLoginAttempts)
+		assert.NotNil(t, updated.LastFailedLoginAt)
+	})
+
+	t.Run("IncrementFailedLoginAttempts accumulates across multiple calls", func(t *testing.T) {
+		user := createTestUser(t, queries, "incrattempts_multi")
+
+		for i := int32(1); i <= 3; i++ {
+			updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+			require.NoError(t, err)
+			assert.Equal(t, i, updated.FailedLoginAttempts)
+		}
+	})
+
+	t.Run("LockUserAccount sets locked_until", func(t *testing.T) {
+		user := createTestUser(t, queries, "lockaccount")
+
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		updated, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		assert.NotNil(t, updated.LockedUntil)
+		assert.WithinDuration(t, lockedUntil, *updated.LockedUntil, time.Second)
+	})
+
+	t.Run("ResetLoginAttempts clears counter, timestamp, and locked_until", func(t *testing.T) {
+		user := createTestUser(t, queries, "resetattempts")
+
+		// Increment attempts twice
+		_, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+		_, err = queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		// Lock the account
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		_, err = queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		// Reset
+		reset, err := queries.ResetLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(0), reset.FailedLoginAttempts)
+		assert.Nil(t, reset.LastFailedLoginAt)
+		assert.Nil(t, reset.LockedUntil)
+	})
+
+	t.Run("full lockout sequence: increment, lock, verify, reset", func(t *testing.T) {
+		user := createTestUser(t, queries, "lockoutseq")
+
+		// Increment 3 times
+		for i := int32(1); i <= 3; i++ {
+			updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+			require.NoError(t, err)
+			assert.Equal(t, i, updated.FailedLoginAttempts)
+		}
+
+		// Lock the account
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		locked, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, locked.LockedUntil)
+		assert.Equal(t, int32(3), locked.FailedLoginAttempts)
+
+		// Verify the lock is visible via GetUserByEmailForAuth
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+		assert.NotNil(t, fetched.LockedUntil)
+		assert.True(t, fetched.LockedUntil.After(time.Now()))
+
+		// Reset clears everything
+		reset, err := queries.ResetLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+		assert.Equal(t, int32(0), reset.FailedLoginAttempts)
+		assert.Nil(t, reset.LockedUntil)
+		assert.Nil(t, reset.LastFailedLoginAt)
+	})
+}
+
+func TestUpdatePasswordHash(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("sets password hash on a user without one", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_set")
+		assert.Nil(t, user.PasswordHash)
+
+		hash := "argon2id$v=19$m=65536,t=3,p=4$somesaltvalue$hashedpasswordvalue"
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		assert.NotNil(t, updated.PasswordHash)
+		assert.Equal(t, hash, *updated.PasswordHash)
+	})
+
+	t.Run("replaces an existing password hash", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_replace")
+
+		firstHash := "argon2id$v=19$first_hash"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &firstHash,
+		})
+		require.NoError(t, err)
+
+		secondHash := "argon2id$v=19$second_hash"
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &secondHash,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, secondHash, *updated.PasswordHash)
+	})
+
+	t.Run("clears password hash when set to nil", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_clear")
+
+		hash := "argon2id$v=19$initial_hash"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: nil,
+		})
+		require.NoError(t, err)
+
+		assert.Nil(t, updated.PasswordHash)
+	})
+
+	t.Run("returns error for non-existent user", func(t *testing.T) {
+		hash := "some_hash_value"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           uuid.New(),
+			PasswordHash: &hash,
+		})
+		require.Error(t, err)
+	})
+}
+
+func TestSetForcePasswordChange(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("sets force_password_change to true", func(t *testing.T) {
+		user := createTestUser(t, queries, "setforcepw_true")
+		assert.False(t, user.ForcePasswordChange)
+
+		updated, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		assert.True(t, updated.ForcePasswordChange)
+	})
+
+	t.Run("clears force_password_change back to false", func(t *testing.T) {
+		user := createTestUser(t, queries, "setforcepw_false")
+
+		// Set to true first
+		_, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		// Clear it
+		updated, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: false,
+		})
+		require.NoError(t, err)
+
+		assert.False(t, updated.ForcePasswordChange)
+	})
+
+	t.Run("returns error for non-existent user", func(t *testing.T) {
+		_, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  uuid.New(),
+			ForcePasswordChange: true,
+		})
+		require.Error(t, err)
+	})
+}

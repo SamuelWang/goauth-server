@@ -943,8 +943,8 @@ Extend existing test files to cover:
 - `CreateClient` includes `is_confidential` and `allow_refresh_tokens`
 
 **Acceptance Criteria:**
-- [ ] All new user queries tested end-to-end
-- [ ] Existing passing tests unaffected
+- [x] All new user queries tested end-to-end
+- [x] Existing passing tests unaffected
 
 #### Sub-task 9.4 — Service unit tests: bootstrap (using mock Querier)
 
