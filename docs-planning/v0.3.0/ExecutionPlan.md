@@ -951,7 +951,7 @@ Extend existing test files to cover:
 Referenced in T5.5. Confirm all nine test cases in T5.5 are implemented and green.
 
 **Acceptance Criteria:**
-- [ ] `go test ./internal/app/auth-server/...` passes, coverage ≥ 80% for bootstrap.go
+- [x] `go test ./internal/app/auth-server/...` passes, coverage ≥ 80% for bootstrap.go
 
 #### Sub-task 9.5 — Service unit tests: account lockout state machine
 

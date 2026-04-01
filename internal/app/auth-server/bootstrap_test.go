@@ -31,7 +31,7 @@ func validAdminCfg() config.BootstrapConfig {
 	return config.BootstrapConfig{
 		AllowDefaultAdmin:    true,
 		DefaultAdminEmail:    "admin@example.com",
-		DefaultAdminPassword: "ValidPass1!",
+		DefaultAdminPassword: "ValidPass123!",
 	}
 }
 
@@ -157,6 +157,20 @@ func TestBootstrapDefaultAdmin_InvalidEmail(t *testing.T) {
 	err := BootstrapDefaultAdmin(context.Background(), cfg, devServerCfg(), q, auditSvc)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "valid email")
+	q.AssertNotCalled(t, "CreateUser")
+}
+
+// T5.5 case 4: Weak password → error, no CreateUser call.
+func TestBootstrapDefaultAdmin_WeakPassword(t *testing.T) {
+	cfg := validAdminCfg()
+	cfg.DefaultAdminPassword = "weak" // Too short, missing required character classes.
+
+	q := &mocks.MockQuerier{}
+	auditSvc, _ := newPermissiveMockAuditService(t)
+
+	err := BootstrapDefaultAdmin(context.Background(), cfg, devServerCfg(), q, auditSvc)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "policy")
 	q.AssertNotCalled(t, "CreateUser")
 }
 

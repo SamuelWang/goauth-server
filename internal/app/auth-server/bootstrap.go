@@ -15,6 +15,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/util"
+	"github.com/SamuelWang/goauth-server/internal/util/password"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
@@ -110,6 +111,11 @@ func BootstrapDefaultAdmin(
 	// Validate email address format.
 	if _, err := mail.ParseAddress(cfg.DefaultAdminEmail); err != nil {
 		return fmt.Errorf("bootstrap: DEFAULT_ADMIN_EMAIL is not a valid email address: %w", err)
+	}
+
+	// Validate password complexity before touching the database.
+	if err := password.Validate(cfg.DefaultAdminPassword, cfg.DefaultAdminEmail); err != nil {
+		return fmt.Errorf("bootstrap: DEFAULT_ADMIN_PASSWORD does not meet policy: %w", err)
 	}
 
 	// Idempotency: do nothing if an admin already exists.
