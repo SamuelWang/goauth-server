@@ -1003,7 +1003,7 @@ Extend or create handler-level tests:
 - Login during active lockout → `429` with `Retry-After` header
 
 **Acceptance Criteria:**
-- [ ] All five paths return the correct HTTP status and response body
+- [x] All five paths return the correct HTTP status and response body
 
 #### Sub-task 9.9 — Handler integration tests: `POST /api/v1/auth/token`
 
@@ -1013,8 +1013,8 @@ Extend or create handler-level tests:
 - `grant_type=refresh_token` with replayed token → `400 invalid_grant`, family revoked
 
 **Acceptance Criteria:**
-- [ ] All four paths covered
-- [ ] Existing authorization code grant tests still pass
+- [x] All four paths covered
+- [x] Existing authorization code grant tests still pass
 
 #### Sub-task 9.10 — Handler integration tests: `POST /api/v1/auth/revoke`
 
@@ -1024,8 +1024,8 @@ Extend or create handler-level tests:
 - Unauthenticated request → `401`
 
 **Acceptance Criteria:**
-- [ ] All four cases return correct HTTP status
-- [ ] DB state verified after revocation
+- [x] All four cases return correct HTTP status
+- [x] DB state verified after revocation
 
 #### Sub-task 9.11 — Handler integration tests: `POST /api/v1/auth/change-password`
 
@@ -1035,8 +1035,8 @@ Extend or create handler-level tests:
 - Weak new password → `400` with policy error message
 
 **Acceptance Criteria:**
-- [ ] All four cases covered
-- [ ] Both audit entries written on success
+- [x] All four cases covered
+- [x] Both audit entries written on success
 
 #### Sub-task 9.12 — Handler integration tests: `DELETE /api/v1/admin/users/:id/lockout`
 
@@ -1045,7 +1045,7 @@ Extend or create handler-level tests:
 - Non-admin JWT → `403`
 
 **Acceptance Criteria:**
-- [ ] All three cases covered
+- [x] All three cases covered
 
 #### Sub-task 9.13 — Password validator unit tests
 
