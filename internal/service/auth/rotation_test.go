@@ -190,3 +190,214 @@ func TestRotateRefreshToken_RevokesFamilyInSingleStatement(t *testing.T) {
 	q.AssertExpectations(t)
 	q.AssertNumberOfCalls(t, "RevokeRefreshTokenFamily", 1)
 }
+
+// validRefreshToken builds a non-revoked, non-expired repository.RefreshToken
+// for use in happy-path rotation tests.
+func validRefreshToken(clientID, userID uuid.UUID) repository.RefreshToken {
+	return repository.RefreshToken{
+		ID:            uuid.New(),
+		TokenFamilyID: uuid.New(),
+		TokenHash:     "some-hash",
+		ClientID:      clientID,
+		UserID:        userID,
+		Scope:         "openid offline_access",
+		ExpiresAt:     time.Now().Add(24 * time.Hour),
+		IsRevoked:     false,
+	}
+}
+
+// TestRotateRefreshToken_ValidRotation verifies the happy-path: the old token
+// is marked as used, a new access token is issued, a new refresh token is
+// created, and the rotation audit event is written.
+func TestRotateRefreshToken_ValidRotation(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	record := validRefreshToken(clientID, userID)
+	rawToken := "valid-raw-token"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	user := sampleUser()
+	user.ID = userID
+
+	accessTokenRecord := repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: "access-token-hash",
+		ClientID:  clientID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(60 * time.Minute),
+	}
+	newRefreshTokenRecord := repository.RefreshToken{
+		ID:            uuid.New(),
+		TokenFamilyID: record.TokenFamilyID,
+		ClientID:      clientID,
+		UserID:        userID,
+		ExpiresAt:     time.Now().Add(30 * 24 * time.Hour),
+		IsRevoked:     false,
+	}
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(record, nil)
+	q.On("MarkRefreshTokenUsed", mock.Anything, record.ID).Return(nil)
+	q.On("GetUserByID", mock.Anything, userID).Return(user, nil)
+	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(accessTokenRecord, nil)
+	q.On("CreateRefreshToken", mock.Anything, mock.MatchedBy(func(p repository.CreateRefreshTokenParams) bool {
+		return p.TokenFamilyID == record.TokenFamilyID && p.ClientID == clientID && p.UserID == userID
+	})).Return(newRefreshTokenRecord, nil)
+	q.On("CreateAuditLogEntry", mock.Anything, mock.MatchedBy(func(p repository.CreateAuditLogEntryParams) bool {
+		return p.EventType == string(audit.EventRefreshTokenRotated)
+	})).Return(uuid.New(), nil)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotEmpty(t, resp.AccessToken)
+	assert.NotEmpty(t, resp.RefreshToken)
+	assert.Equal(t, "Bearer", resp.TokenType)
+	assert.Greater(t, resp.ExpiresIn, int64(0))
+	q.AssertExpectations(t)
+}
+
+// TestRotateRefreshToken_ExpiredToken verifies that presenting an expired
+// refresh token returns ErrTokenExpired without issuing any new tokens.
+func TestRotateRefreshToken_ExpiredToken(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientID := uuid.New()
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientID
+
+	expiredToken := repository.RefreshToken{
+		ID:            uuid.New(),
+		TokenFamilyID: uuid.New(),
+		TokenHash:     "expired-hash",
+		ClientID:      clientID,
+		UserID:        userID,
+		Scope:         "openid offline_access",
+		ExpiresAt:     time.Now().Add(-1 * time.Hour), // expired
+		IsRevoked:     false,
+	}
+	rawToken := "expired-raw-token"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	q.On("GetClient", mock.Anything, clientID).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(expiredToken, nil)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientID.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrTokenExpired)
+	q.AssertExpectations(t)
+}
+
+// TestRotateRefreshToken_ClientMismatch verifies that a valid, non-expired
+// refresh token issued for client B is rejected when client A presents it,
+// returning ErrInvalidGrant without issuing any new tokens.
+func TestRotateRefreshToken_ClientMismatch(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	svc := newTestServiceWithAudit(t, q)
+
+	rawSecret := "super-secret"
+	clientA := uuid.New()
+	clientB := uuid.New() // token belongs to this client
+	userID := uuid.New()
+
+	client := activeClient(t, util.SHA256Hex(rawSecret))
+	client.ID = clientA // authenticating as client A
+
+	// Token was issued for client B, not client A.
+	mismatchedToken := repository.RefreshToken{
+		ID:            uuid.New(),
+		TokenFamilyID: uuid.New(),
+		TokenHash:     "mismatched-hash",
+		ClientID:      clientB,
+		UserID:        userID,
+		Scope:         "openid offline_access",
+		ExpiresAt:     time.Now().Add(24 * time.Hour),
+		IsRevoked:     false,
+	}
+	rawToken := "mismatched-raw-token"
+	tokenHash := util.SHA256Hex(rawToken)
+
+	q.On("GetClient", mock.Anything, clientA).Return(client, nil)
+	q.On("GetRefreshTokenByHash", mock.Anything, tokenHash).Return(mismatchedToken, nil)
+
+	resp, err := svc.RotateRefreshToken(context.Background(), rawToken, clientA.String(), rawSecret)
+
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrInvalidGrant)
+	q.AssertExpectations(t)
+}
+
+// TestExchangeCodeForToken_AllowRefreshTokensFalse verifies that when a
+// client has AllowRefreshTokens=false, no refresh token is issued even when
+// the granted scope includes "offline_access". The response RefreshToken field
+// must be empty and CreateRefreshToken must never be called.
+func TestExchangeCodeForToken_AllowRefreshTokensFalse(t *testing.T) {
+	q := &mocks.MockQuerier{}
+	psvc := &mockProviderService{}
+
+	const plainSecret = "client-secret-value"
+
+	// Build a client that explicitly disallows refresh tokens.
+	client := activeClient(t, util.SHA256Hex(plainSecret))
+	client.AllowRefreshTokens = false
+
+	user := sampleUser()
+	isRevoked := false
+	offlineScope := "openid offline_access"
+	codeRow := repository.AuthorizationCode{
+		ID:          uuid.New(),
+		Code:        "auth-code-offline",
+		ClientID:    client.ID,
+		UserID:      user.ID,
+		ProviderID:  uuid.New(),
+		RedirectUri: "https://app.example.com/callback",
+		ExpiresAt:   time.Now().Add(5 * time.Minute),
+		UsedAt:      nil,
+		IsRevoked:   &isRevoked,
+		Scope:       &offlineScope,
+	}
+
+	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
+	q.On("GetAuthorizationCode", mock.Anything, "auth-code-offline").Return(codeRow, nil)
+	q.On("MarkAuthorizationCodeUsed", mock.Anything, codeRow.ID).Return(codeRow, nil)
+	q.On("GetUserByID", mock.Anything, user.ID).Return(user, nil)
+	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(repository.AccessToken{
+		ID:        uuid.New(),
+		TokenHash: "hash",
+		ClientID:  client.ID,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(60 * time.Minute),
+	}, nil)
+	// CreateRefreshToken must NOT be called — we deliberately do not register
+	// a mock expectation for it; any unexpected call would cause a test failure.
+
+	svc := newTestService(t, q, psvc)
+	resp, err := svc.ExchangeCodeForToken(
+		context.Background(),
+		"auth-code-offline",
+		client.ID,
+		plainSecret,
+		"https://app.example.com/callback",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotEmpty(t, resp.AccessToken)
+	assert.Empty(t, resp.RefreshToken, "no refresh token should be issued when AllowRefreshTokens=false")
+	q.AssertExpectations(t)
+	q.AssertNumberOfCalls(t, "CreateRefreshToken", 0)
+}

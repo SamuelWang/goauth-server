@@ -990,7 +990,7 @@ In `internal/service/auth/refresh_test.go` (or `rotation_test.go`):
 - `AllowRefreshTokens=false`: no refresh token issued during code exchange
 
 **Acceptance Criteria:**
-- [ ] All five cases covered
+- [x] All five cases covered
 
 #### Sub-task 9.8 — Handler integration tests: `POST /api/v1/auth/login`
 
