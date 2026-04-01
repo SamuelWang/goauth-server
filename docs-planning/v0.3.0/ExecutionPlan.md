@@ -964,8 +964,8 @@ In `internal/service/auth/login_test.go` (or `authorization_test.go`), use mock 
 - Successful login: counter reset, `last_login_at` updated
 
 **Acceptance Criteria:**
-- [ ] All five cases covered
-- [ ] Audit event written on lockout transition, not on every failure
+- [x] All five cases covered
+- [x] Audit event written on lockout transition, not on every failure
 
 #### Sub-task 9.6 — Service unit tests: challenge token lifecycle
 
