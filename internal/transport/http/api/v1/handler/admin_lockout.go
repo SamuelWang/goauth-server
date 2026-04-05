@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// UnlockUser handles DELETE /api/v1/admin/users/:id/lockout — clears the lockout
+// UnlockUser handles DELETE /api/v1/users/:id/lockout — clears the lockout
 // on a user account. Admin only.
 //
 // @Summary     Unlock a locked user account
@@ -24,7 +24,7 @@ import (
 // @Failure     404  {object}  handler.ErrorResponse
 // @Failure     500  {object}  handler.ErrorResponse
 // @Security    BearerAuth
-// @Router      /api/v1/admin/users/{id}/lockout [delete]
+// @Router      /api/v1/users/{id}/lockout [delete]
 func (h *ApiV1Handler) UnlockUser(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -61,7 +61,7 @@ func (h *ApiV1Handler) UnlockUser(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// RevokeUserSessions handles DELETE /api/v1/admin/users/:id/sessions — revokes
+// RevokeUserSessions handles DELETE /api/v1/users/:id/sessions — revokes
 // all active refresh tokens for the specified user. Admin only.
 //
 // @Summary     Revoke all sessions for a user
@@ -74,7 +74,7 @@ func (h *ApiV1Handler) UnlockUser(c *gin.Context) {
 // @Failure     404  {object}  handler.ErrorResponse
 // @Failure     500  {object}  handler.ErrorResponse
 // @Security    BearerAuth
-// @Router      /api/v1/admin/users/{id}/sessions [delete]
+// @Router      /api/v1/users/{id}/sessions [delete]
 func (h *ApiV1Handler) RevokeUserSessions(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

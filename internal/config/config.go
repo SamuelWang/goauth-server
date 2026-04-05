@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
 			Name:    getEnv("APP_NAME", "goauth-server"),
-			Version: getEnv("VERSION", "0.0.1"),
+			Version: getEnv("VERSION", "0.3.0"),
 		},
 		Server: ServerConfig{
 			Env:      getEnv("ENV", "development"),

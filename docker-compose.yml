@@ -65,7 +65,7 @@ services:
     environment:
       # Application
       APP_NAME: ${APP_NAME:-goauth-server}
-      VERSION: ${VERSION:-0.2.0}
+      VERSION: ${VERSION:-0.3.0}
 
       # Server – HOST/SCHEME are used to construct the OAuth callback URL
       ENV: ${ENV:-development}
@@ -92,6 +92,27 @@ services:
 
       # CORS – comma-separated allowed origins (leave blank in development)
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+
+      # Bootstrap (Admin and OAuth Client; optional)
+      ALLOW_DEFAULT_ADMIN: ${ALLOW_DEFAULT_ADMIN:-false}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      ALLOW_DEFAULT_CLIENT: ${ALLOW_DEFAULT_CLIENT:-false}
+      DEFAULT_CLIENT_ID: ${DEFAULT_CLIENT_ID:-}
+      DEFAULT_CLIENT_SECRET: ${DEFAULT_CLIENT_SECRET:-}
+      DEFAULT_CLIENT_REDIRECT_URIS: ${DEFAULT_CLIENT_REDIRECT_URIS:-}
+      DEFAULT_CLIENT_NAME: ${DEFAULT_CLIENT_NAME:-"GoAuth Client"}
+      DEFAULT_CLIENT_CONFIDENTIAL: ${DEFAULT_CLIENT_CONFIDENTIAL:-true}
+
+      # Refresh Tokens
+      REFRESH_TOKEN_EXPIRY_DAYS: ${REFRESH_TOKEN_EXPIRY_DAYS:-30}
+      REFRESH_TOKEN_ROTATION_ENABLED: ${REFRESH_TOKEN_ROTATION_ENABLED:-true}
+      REFRESH_TOKEN_MAX_LIFETIME_DAYS: ${REFRESH_TOKEN_MAX_LIFETIME_DAYS:-90}
+
+      # Account Lockout
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_ATTEMPT_WINDOW_SECONDS: ${LOGIN_ATTEMPT_WINDOW_SECONDS:-600}
+      LOGIN_LOCKOUT_DURATION_SECONDS: ${LOGIN_LOCKOUT_DURATION_SECONDS:-900}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     healthcheck:

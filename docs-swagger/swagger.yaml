@@ -40,6 +40,16 @@ definitions:
       user_id:
         type: string
     type: object
+  internal_transport_http_api_v1_handler.ChangePasswordRequest:
+    properties:
+      challenge_token:
+        type: string
+      new_password:
+        type: string
+    required:
+    - challenge_token
+    - new_password
+    type: object
   internal_transport_http_api_v1_handler.ClientResponse:
     properties:
       created_at:
@@ -208,6 +218,25 @@ definitions:
           $ref: '#/definitions/internal_transport_http_api_v1_handler.UserResponse'
         type: array
     type: object
+  internal_transport_http_api_v1_handler.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_transport_http_api_v1_handler.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      token_type:
+        type: string
+    type: object
   internal_transport_http_api_v1_handler.ProviderResponse:
     properties:
       auth_url:
@@ -267,6 +296,8 @@ definitions:
         type: string
       expires_in:
         type: integer
+      refresh_token:
+        type: string
       scope:
         type: string
       token_type:
@@ -436,8 +467,84 @@ info:
   license:
     name: GPL-3.0 license
   title: Goauth Server API
-  version: 0.2.0
+  version: 0.3.0
 paths:
+  /api/v1/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Completes the force-password-change flow. Validates the challenge
+        token and the new password, persists the password change, and
+        issues a new access token.
+      parameters:
+      - description: Change password request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      summary: Exchange challenge token for a new password
+      tags:
+      - Auth
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email + password. Subject to rate limiting
+        and account lockout.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_api_v1_handler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      summary: Direct login with email and password
+      tags:
+      - Auth
   /api/v1/auth/logout:
     post:
       description: Revokes the bearer access token and clears the session cookie.
@@ -482,12 +589,45 @@ paths:
       summary: Get current user
       tags:
       - Auth
+  /api/v1/auth/revoke:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: |-
+        Revokes a refresh token or access token. Returns 200 in all cases
+        except unauthenticated requests (401). Linked tokens are also revoked.
+      parameters:
+      - description: HTTP Basic (client) or Bearer (user) auth
+        in: header
+        name: Authorization
+        type: string
+      - description: Token value to revoke
+        in: formData
+        name: token
+        required: true
+        type: string
+      - description: refresh_token or access_token
+        in: formData
+        name: token_type_hint
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      summary: Revoke a token (RFC 7009)
+      tags:
+      - Auth
   /api/v1/auth/token:
     post:
       consumes:
       - application/json
-      description: OAuth 2.0 token endpoint. Only the authorization_code grant type
-        is supported.
+      description: OAuth 2.0 token endpoint. Supports authorization_code and refresh_token
+        grant types.
       parameters:
       - description: Token exchange request
         in: body
@@ -514,7 +654,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
-      summary: Exchange authorization code for access token
+      summary: Exchange authorization code or refresh token for access token
       tags:
       - Auth
   /api/v1/clients:
@@ -1337,6 +1477,69 @@ paths:
       security:
       - BearerAuth: []
       summary: Update user status
+      tags:
+      - Users
+  /api/v1/users/{id}/lockout:
+    delete:
+      description: Clears the locked_until field for the specified user. Admin only.
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unlock a locked user account
+      tags:
+      - Users
+  /api/v1/users/{id}/sessions:
+    delete:
+      description: Revokes all active refresh tokens belonging to the specified user.
+        Admin only.
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_transport_http_api_v1_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke all sessions for a user
       tags:
       - Users
   /ops/health:
