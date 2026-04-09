@@ -316,7 +316,7 @@ Stores issued JWT access tokens for auditing and revocation. The full token is n
 |---|---|---|---|---|
 | `id` | `uuid` | NOT NULL | `gen_random_uuid()` | Primary key |
 | `token_hash` | `text` | NOT NULL | — | Hash of the issued JWT access token (unique) |
-| `client_id` | `uuid` | NOT NULL | — | FK → `clients.id`; the client the token was issued to |
+| `client_id` | `uuid` | NULL | — | FK → `clients.id`; the client the token was issued to |
 | `user_id` | `uuid` | NOT NULL | — | FK → `users.id`; the user the token represents |
 | `scope` | `text` | NULL | `''` | Scopes granted by this token |
 | `expires_at` | `timestamptz` | NOT NULL | — | Expiry timestamp of the token |
