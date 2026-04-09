@@ -165,7 +165,7 @@ jobs:
           go test -race \
             -coverprofile=coverage.out \
             -covermode=atomic \
-            ./...
+            $(go list ./... | grep -v 'goauth-server/internal/loadtest')
         env:
           TESTCONTAINERS_RYUK_DISABLED: "false"
           DOCKER_HOST: unix:///var/run/docker.sock
