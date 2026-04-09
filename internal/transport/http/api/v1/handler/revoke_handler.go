@@ -90,6 +90,16 @@ func (h *ApiV1Handler) authenticateRevokeRequest(c *gin.Context) bool {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return false
 		}
+		revoked, err := h.authService.IsTokenRevoked(c.Request.Context(), bearerToken)
+		if err != nil {
+			log.Printf("Revoke: checking token revocation: %v", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return false
+		}
+		if revoked {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return false
+		}
 		return true
 	}
 
