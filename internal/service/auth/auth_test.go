@@ -256,7 +256,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "hash",
-		ClientID:  client.ID,
+		ClientID:  &client.ID,
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}, nil)

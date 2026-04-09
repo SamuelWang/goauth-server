@@ -36,7 +36,7 @@ func buildAccessTokenSessionRow(id, clientID, userID uuid.UUID) repository.Acces
 	return repository.AccessToken{
 		ID:        id,
 		TokenHash: "some-token-hash-" + id.String(),
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &isRevoked,

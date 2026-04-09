@@ -14,7 +14,7 @@ import (
 type AccessToken struct {
 	ID        uuid.UUID
 	TokenHash string
-	ClientID  uuid.UUID
+	ClientID  *uuid.UUID
 	UserID    uuid.UUID
 	Scope     *string
 	ExpiresAt time.Time

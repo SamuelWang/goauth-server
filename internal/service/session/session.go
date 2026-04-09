@@ -31,7 +31,7 @@ type AuthorizationCode struct {
 // returned directly in API responses.
 type AccessToken struct {
 	ID        uuid.UUID
-	ClientID  uuid.UUID
+	ClientID  *uuid.UUID
 	UserID    uuid.UUID
 	Scope     *string
 	ExpiresAt time.Time
@@ -261,9 +261,9 @@ func toAuthorizationCode(r repository.AuthorizationCode) AuthorizationCode {
 		RedirectURI: r.RedirectUri,
 		Scope:       r.Scope,
 		ExpiresAt:   r.ExpiresAt,
-		UsedAt: r.UsedAt,
-		IsRevoked: isRevoked,
-		CreatedAt: r.CreatedAt,
+		UsedAt:      r.UsedAt,
+		IsRevoked:   isRevoked,
+		CreatedAt:   r.CreatedAt,
 	}
 }
 

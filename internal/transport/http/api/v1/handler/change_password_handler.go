@@ -72,6 +72,12 @@ func (h *ApiV1Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	if err := h.authService.StoreDirectLoginToken(c.Request.Context(), tokenStr, userID); err != nil {
+		log.Printf("ChangePassword: storing access token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+
 	c.JSON(http.StatusOK, LoginResponse{
 		AccessToken: tokenStr,
 		TokenType:   "Bearer",

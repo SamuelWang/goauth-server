@@ -49,10 +49,11 @@ import (
 // notRevokedTokenRow builds a non-revoked AccessToken for the given raw token and user.
 func notRevokedTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 	notRevoked := false
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: util.SHA256Hex(rawToken),
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -792,7 +793,7 @@ func TestSecurity_TokenHashExcludedFromSessionResponse(t *testing.T) {
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "this-should-never-appear-in-response",
-		ClientID:  uuid.New(),
+		ClientID:  func() *uuid.UUID { id := uuid.New(); return &id }(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,

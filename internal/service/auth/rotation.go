@@ -114,7 +114,7 @@ func (s *Service) RotateRefreshToken(ctx context.Context, rawToken, clientID, cl
 	scopeStr := record.Scope
 	accessTokenRecord, err := s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: accessTokenHash,
-		ClientID:  cid,
+		ClientID:  &cid,
 		UserID:    user.ID,
 		Scope:     util.StrPtr(scopeStr),
 		ExpiresAt: expiresAt,

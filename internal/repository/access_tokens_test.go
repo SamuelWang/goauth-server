@@ -14,7 +14,7 @@ import (
 func buildAccessTokenParams(clientID, userID uuid.UUID) CreateAccessTokenParams {
 	return CreateAccessTokenParams{
 		TokenHash: uuid.New().String(), // use UUID as stand-in for a token hash
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}
@@ -36,7 +36,7 @@ func TestCreateAccessToken(t *testing.T) {
 
 		assert.NotEqual(t, uuid.Nil, token.ID)
 		assert.Equal(t, params.TokenHash, token.TokenHash)
-		assert.Equal(t, client.ID, token.ClientID)
+		assert.Equal(t, &client.ID, token.ClientID)
 		assert.Equal(t, user.ID, token.UserID)
 		assert.WithinDuration(t, params.ExpiresAt, token.ExpiresAt, time.Second)
 		assert.NotZero(t, token.CreatedAt)

@@ -252,7 +252,7 @@ func (s *Service) ExchangeCodeForToken(
 	expiresAt := time.Now().Add(s.Expiry())
 	accessTokenRecord, err := s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: tokenHash,
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    user.ID,
 		Scope:     authCode.Scope,
 		ExpiresAt: expiresAt,
@@ -351,16 +351,16 @@ func (s *Service) RevokeUserRefreshTokens(ctx context.Context, userID uuid.UUID,
 // revoked in the database. It should be called after JWT signature/expiry
 // validation so the database is only consulted for cryptographically valid tokens.
 //
-// Tokens not present in the database are treated as NOT revoked — their
-// validity is enforced solely by the JWT signature and expiry claim. This
-// supports access tokens issued via the direct login endpoint, which are not
-// persisted to the access_tokens table.
+// All access tokens issued by this service are persisted in the access_tokens
+// table (direct-login tokens with NULL client_id, OAuth-flow tokens with the
+// issuing client_id). A token not found in the database is treated as revoked
+// to guard against edge-cases where the record was not written.
 func (s *Service) IsTokenRevoked(ctx context.Context, rawToken string) (bool, error) {
 	record, err := s.repo.GetAccessToken(ctx, util.SHA256Hex(rawToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Token not tracked in DB — not explicitly revoked.
-			return false, nil
+			// Token not found in DB — treat as revoked (no valid record exists).
+			return true, nil
 		}
 		return false, fmt.Errorf("looking up access token: %w", err)
 	}

@@ -15,7 +15,7 @@ func createTestAccessToken(t *testing.T, queries *Queries, clientID, userID uuid
 	t.Helper()
 	token, err := queries.CreateAccessToken(context.Background(), CreateAccessTokenParams{
 		TokenHash: uuid.New().String(),
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	})

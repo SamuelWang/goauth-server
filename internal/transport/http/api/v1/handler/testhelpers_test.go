@@ -120,10 +120,11 @@ func (e *testEnv) generateToken(t *testing.T, userID, email string) string {
 // activeTokenRow builds a non-revoked AccessToken repository row for the given raw token.
 func activeTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 	notRevoked := false
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: util.SHA256Hex(rawToken),
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -133,10 +134,11 @@ func activeTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 // revokedTokenRow builds a revoked AccessToken repository row.
 func revokedTokenRow(rawToken string) repository.AccessToken {
 	revoked := true
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: util.SHA256Hex(rawToken),
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &revoked,

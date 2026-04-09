@@ -47,7 +47,7 @@ INSERT INTO access_tokens (
 
 type CreateAccessTokenParams struct {
 	TokenHash string
-	ClientID  uuid.UUID
+	ClientID  *uuid.UUID
 	UserID    uuid.UUID
 	Scope     *string
 	ExpiresAt time.Time

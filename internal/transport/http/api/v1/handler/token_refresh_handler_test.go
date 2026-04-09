@@ -78,7 +78,7 @@ func TestTokenExchange_RefreshToken_ValidRotation(t *testing.T) {
 		Return(repository.AccessToken{
 			ID:        uuid.New(),
 			TokenHash: "new-access-token-hash",
-			ClientID:  cl.ID,
+			ClientID:  &cl.ID,
 			UserID:    userID,
 			ExpiresAt: time.Now().Add(time.Hour),
 		}, nil)

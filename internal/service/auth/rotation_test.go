@@ -235,7 +235,7 @@ func TestRotateRefreshToken_ValidRotation(t *testing.T) {
 	accessTokenRecord := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "access-token-hash",
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}
@@ -383,7 +383,7 @@ func TestExchangeCodeForToken_AllowRefreshTokensFalse(t *testing.T) {
 	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "hash",
-		ClientID:  client.ID,
+		ClientID:  &client.ID,
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}, nil)
@@ -520,7 +520,7 @@ func TestRotateRefreshToken_CreateRefreshTokenError(t *testing.T) {
 	accessTokenRecord := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "access-token-hash",
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}

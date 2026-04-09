@@ -80,7 +80,7 @@ func TestRevoke_ValidRefreshToken(t *testing.T) {
 	linkedAT := repository.AccessToken{
 		ID:        linkedAccessTokenID,
 		TokenHash: util.SHA256Hex("linked-at-raw"),
-		ClientID:  rt.ClientID,
+		ClientID:  &rt.ClientID,
 		UserID:    rt.UserID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -110,7 +110,7 @@ func TestRevoke_ValidAccessToken(t *testing.T) {
 	at := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: atHash,
-		ClientID:  uuid.New(),
+		ClientID:  func() *uuid.UUID { id := uuid.New(); return &id }(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,

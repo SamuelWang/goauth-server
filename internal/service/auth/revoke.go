@@ -100,11 +100,10 @@ func (s *Service) revokeAccessTokenRecord(ctx context.Context, at repository.Acc
 	}
 	if s.auditSvc != nil {
 		uid := at.UserID
-		cid := at.ClientID
 		_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{
 			EventType: audit.EventAccessTokenRevoked,
 			UserID:    &uid,
-			ClientID:  &cid,
+			ClientID:  at.ClientID,
 			Metadata:  map[string]any{"reason": "client_revoked"},
 		})
 	}

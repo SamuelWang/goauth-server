@@ -100,10 +100,11 @@ func (h *testAuthHelper) generateExpiredToken(t *testing.T) string {
 // activeTokenRecord returns a non-revoked AccessToken row for the given raw token.
 func activeTokenRecord(rawToken string) repository.AccessToken {
 	notRevoked := false
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: util.SHA256Hex(rawToken),
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -113,10 +114,11 @@ func activeTokenRecord(rawToken string) repository.AccessToken {
 // revokedTokenRecord returns an IsRevoked=true AccessToken row for the given raw token.
 func revokedTokenRecord(rawToken string) repository.AccessToken {
 	revoked := true
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: util.SHA256Hex(rawToken),
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &revoked,

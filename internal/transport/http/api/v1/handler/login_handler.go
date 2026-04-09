@@ -85,12 +85,15 @@ func (h *ApiV1Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// Issue a signed JWT access token. Direct-login tokens are not persisted in
-	// the access_tokens table; their validity is enforced by the JWT signature
-	// and expiry claim. See IsTokenRevoked for the corresponding DB-lookup policy.
 	tokenStr, err := h.authService.GenerateAccessToken(result.User.ID.String(), result.User.Email)
 	if err != nil {
 		log.Printf("Login: generating access token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+
+	if err := h.authService.StoreDirectLoginToken(c.Request.Context(), tokenStr, result.User.ID); err != nil {
+		log.Printf("Login: storing access token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}

@@ -356,7 +356,7 @@ func TestLoad(t *testing.T) {
 		ID:        uuid.New(),
 		TokenHash: tHash,
 		UserID:    userID,
-		ClientID:  uuid.New(),
+		ClientID:  func() *uuid.UUID { id := uuid.New(); return &id }(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
 	}
@@ -424,7 +424,7 @@ func TestLoad(t *testing.T) {
 	rtAtRec := repository.AccessToken{
 		ID:        rtAtID,
 		TokenHash: "lt-rt-at-hash",
-		ClientID:  rtClientID,
+		ClientID:  &rtClientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &rtAtRevoked,

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/hex"
@@ -9,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -98,6 +101,24 @@ func (s *Service) GenerateAccessToken(userID, email string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	return token.SignedString(s.privateKey)
+}
+
+// StoreDirectLoginToken persists a direct-login access token (issued by
+// POST /auth/login or POST /auth/change-password) in the access_tokens table
+// so it can be revoked. Direct-login tokens have no associated OAuth client,
+// so client_id is stored as NULL.
+func (s *Service) StoreDirectLoginToken(ctx context.Context, tokenStr string, userID uuid.UUID) error {
+	_, err := s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
+		TokenHash: util.SHA256Hex(tokenStr),
+		ClientID:  nil,
+		UserID:    userID,
+		Scope:     nil,
+		ExpiresAt: time.Now().UTC().Add(s.Expiry()),
+	})
+	if err != nil {
+		return fmt.Errorf("storing direct login token: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) ValidateAccessToken(tokenString string) (*Claims, error) {

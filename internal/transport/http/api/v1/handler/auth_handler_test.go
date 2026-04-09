@@ -165,7 +165,7 @@ func TestTokenExchange_Success(t *testing.T) {
 		Return(repository.AccessToken{
 			ID:        uuid.New(),
 			TokenHash: "some-hash",
-			ClientID:  cl.ID,
+			ClientID:  &cl.ID,
 			UserID:    userID,
 			ExpiresAt: time.Now().Add(time.Hour),
 		}, nil)
