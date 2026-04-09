@@ -9,6 +9,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 )
 
@@ -47,11 +48,11 @@ func (h *ApiV1Handler) ListEnabledProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, ListPublicProvidersResponse{Providers: resp})
 }
 
-// TokenExchange exchanges an authorization code for an access token.
+// TokenExchange exchanges an authorization code or refresh token for an access token.
 // Returns an OAuth 2.0-compliant token response.
 //
-// @Summary     Exchange authorization code for access token
-// @Description OAuth 2.0 token endpoint. Only the authorization_code grant type is supported.
+// @Summary     Exchange authorization code or refresh token for access token
+// @Description OAuth 2.0 token endpoint. Supports authorization_code and refresh_token grant types.
 // @Tags        Auth
 // @Accept      json
 // @Produce     json
@@ -62,17 +63,34 @@ func (h *ApiV1Handler) ListEnabledProviders(c *gin.Context) {
 // @Failure     500  {object}  handler.ErrorResponse
 // @Router      /api/v1/auth/token [post]
 func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
-	var req TokenExchangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// Pre-screen to determine the grant type without consuming the body.
+	// ShouldBindBodyWith caches the raw bytes so subsequent calls can re-read them.
+	var grantCheck struct {
+		GrantType string `json:"grant_type" binding:"required"`
+	}
+	if err := c.ShouldBindBodyWith(&grantCheck, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": err.Error()})
 		return
 	}
 
-	if req.GrantType != "authorization_code" {
+	switch grantCheck.GrantType {
+	case "authorization_code":
+		h.handleAuthorizationCodeGrant(c)
+	case "refresh_token":
+		h.handleRefreshTokenGrant(c)
+	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             "unsupported_grant_type",
-			"error_description": "only authorization_code grant type is supported",
+			"error_description": "supported grant types: authorization_code, refresh_token",
 		})
+	}
+}
+
+// handleAuthorizationCodeGrant processes the authorization_code grant type.
+func (h *ApiV1Handler) handleAuthorizationCodeGrant(c *gin.Context) {
+	var req TokenExchangeRequest
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": err.Error()})
 		return
 	}
 
@@ -99,10 +117,41 @@ func (h *ApiV1Handler) TokenExchange(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, TokenExchangeResponse{
-		AccessToken: tokenResp.AccessToken,
-		TokenType:   tokenResp.TokenType,
-		ExpiresIn:   tokenResp.ExpiresIn,
-		Scope:       tokenResp.Scope,
+		AccessToken:  tokenResp.AccessToken,
+		TokenType:    tokenResp.TokenType,
+		ExpiresIn:    tokenResp.ExpiresIn,
+		Scope:        tokenResp.Scope,
+		RefreshToken: tokenResp.RefreshToken,
+	})
+	metrics.TokensIssuedTotal.Inc()
+}
+
+// handleRefreshTokenGrant processes the refresh_token grant type.
+func (h *ApiV1Handler) handleRefreshTokenGrant(c *gin.Context) {
+	var req RefreshTokenGrantRequest
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": err.Error()})
+		return
+	}
+
+	tokenResp, err := h.authService.RotateRefreshToken(
+		c.Request.Context(),
+		req.RefreshToken,
+		req.ClientID,
+		req.ClientSecret,
+	)
+	if err != nil {
+		util.LogTokenExchangeFailure(c.ClientIP(), c.GetString("request_id"), req.ClientID, err.Error())
+		handleRefreshTokenError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, TokenExchangeResponse{
+		AccessToken:  tokenResp.AccessToken,
+		TokenType:    tokenResp.TokenType,
+		ExpiresIn:    tokenResp.ExpiresIn,
+		Scope:        tokenResp.Scope,
+		RefreshToken: tokenResp.RefreshToken,
 	})
 	metrics.TokensIssuedTotal.Inc()
 }
@@ -133,6 +182,28 @@ func handleTokenExchangeError(c *gin.Context, err error) {
 	}
 }
 
+// handleRefreshTokenError maps refresh token rotation errors to OAuth 2.0 error responses.
+func handleRefreshTokenError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, auth.ErrClientNotFound),
+		errors.Is(err, auth.ErrClientInactive),
+		errors.Is(err, auth.ErrInvalidClientSecret):
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":             "invalid_client",
+			"error_description": "client authentication failed",
+		})
+	case errors.Is(err, auth.ErrInvalidGrant),
+		errors.Is(err, auth.ErrTokenExpired):
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":             "invalid_grant",
+			"error_description": "The provided refresh token is invalid, expired, or has been revoked.",
+		})
+	default:
+		log.Printf("RotateRefreshToken: unexpected error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+	}
+}
+
 // Logout revokes the caller's access token and clears the session cookie.
 // Requires a valid bearer token (enforced by AuthMiddleware).
 //
@@ -156,6 +227,17 @@ func (h *ApiV1Handler) Logout(c *gin.Context) {
 				userID := c.GetString("user_id")
 				util.LogTokenRevoked(c.ClientIP(), c.GetString("request_id"), userID)
 				metrics.TokenRevocationsTotal.Inc()
+			}
+		}
+	}
+
+	// Also revoke all refresh tokens belonging to the user so they cannot be
+	// rotated after logout. Non-fatal: a failure is logged but does not block
+	// the logout response.
+	if userIDStr := c.GetString("user_id"); userIDStr != "" {
+		if userUUID, err := uuid.Parse(userIDStr); err == nil {
+			if err := h.authService.RevokeUserRefreshTokens(c.Request.Context(), userUUID, "logout"); err != nil {
+				log.Printf("Logout: failed to revoke refresh tokens: %v", err)
 			}
 		}
 	}

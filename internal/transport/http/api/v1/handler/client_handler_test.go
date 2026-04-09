@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -24,7 +25,7 @@ func adminAuthSetup(t *testing.T, env *testEnv) (string, uuid.UUID) {
 	tokenRow := activeTokenRow(token, adminID)
 	adminRow := buildAdminUser(adminID)
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil)
 	env.mockQ.On("GetUserByID", mock.Anything, adminID).Return(adminRow, nil)
 
 	return token, adminID
@@ -38,7 +39,7 @@ func nonAdminAuthSetup(t *testing.T, env *testEnv) string {
 	tokenRow := activeTokenRow(token, userID)
 	userRow := buildRegularUser(userID)
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil)
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(userRow, nil)
 
 	return token

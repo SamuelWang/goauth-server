@@ -264,3 +264,106 @@ func TestDeleteClient(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestCreateClientWithV030Fields(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	user := createTestUser(t, queries, "createclientv030")
+
+	t.Run("is_confidential and allow_refresh_tokens default to false when not set", func(t *testing.T) {
+		client, err := queries.CreateClient(ctx, CreateClientParams{
+			Name:             "default-fields-client",
+			ClientSecretHash: "sha256hexhash",
+			RedirectUris:     []string{"https://example.com/callback"},
+			GrantTypes:       []string{"authorization_code"},
+			CreatedBy:        user.ID,
+		})
+		require.NoError(t, err)
+
+		assert.False(t, client.IsConfidential)
+		assert.False(t, client.AllowRefreshTokens)
+	})
+
+	t.Run("creates confidential client with refresh tokens enabled", func(t *testing.T) {
+		isActive := true
+		client, err := queries.CreateClient(ctx, CreateClientParams{
+			Name:               "confidential-refresh-client",
+			ClientSecretHash:   "sha256hexhash",
+			RedirectUris:       []string{"https://example.com/callback"},
+			GrantTypes:         []string{"authorization_code", "refresh_token"},
+			IsActive:           &isActive,
+			CreatedBy:          user.ID,
+			IsConfidential:     true,
+			AllowRefreshTokens: true,
+		})
+		require.NoError(t, err)
+
+		assert.True(t, client.IsConfidential)
+		assert.True(t, client.AllowRefreshTokens)
+	})
+
+	t.Run("creates public client without refresh tokens", func(t *testing.T) {
+		client, err := queries.CreateClient(ctx, CreateClientParams{
+			Name:               "public-client",
+			ClientSecretHash:   "sha256hexhash",
+			RedirectUris:       []string{"https://example.com/callback"},
+			GrantTypes:         []string{"authorization_code"},
+			CreatedBy:          user.ID,
+			IsConfidential:     false,
+			AllowRefreshTokens: false,
+		})
+		require.NoError(t, err)
+
+		assert.False(t, client.IsConfidential)
+		assert.False(t, client.AllowRefreshTokens)
+	})
+
+	t.Run("GetClient returns is_confidential and allow_refresh_tokens fields", func(t *testing.T) {
+		created, err := queries.CreateClient(ctx, CreateClientParams{
+			Name:               "getcheck-client",
+			ClientSecretHash:   "sha256hexhash",
+			RedirectUris:       []string{"https://example.com/callback"},
+			GrantTypes:         []string{"authorization_code"},
+			CreatedBy:          user.ID,
+			IsConfidential:     true,
+			AllowRefreshTokens: true,
+		})
+		require.NoError(t, err)
+
+		fetched, err := queries.GetClient(ctx, created.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, created.IsConfidential, fetched.IsConfidential)
+		assert.Equal(t, created.AllowRefreshTokens, fetched.AllowRefreshTokens)
+		assert.True(t, fetched.IsConfidential)
+		assert.True(t, fetched.AllowRefreshTokens)
+	})
+
+	t.Run("UpdateClient can mutate is_confidential and allow_refresh_tokens", func(t *testing.T) {
+		created, err := queries.CreateClient(ctx, CreateClientParams{
+			Name:               "update-new-fields-client",
+			ClientSecretHash:   "sha256hexhash",
+			RedirectUris:       []string{"https://example.com/callback"},
+			GrantTypes:         []string{"authorization_code"},
+			CreatedBy:          user.ID,
+			IsConfidential:     false,
+			AllowRefreshTokens: false,
+		})
+		require.NoError(t, err)
+
+		updated, err := queries.UpdateClient(ctx, UpdateClientParams{
+			ID:                 created.ID,
+			Name:               created.Name,
+			RedirectUris:       created.RedirectUris,
+			GrantTypes:         []string{"authorization_code", "refresh_token"},
+			IsConfidential:     true,
+			AllowRefreshTokens: true,
+		})
+		require.NoError(t, err)
+
+		assert.True(t, updated.IsConfidential)
+		assert.True(t, updated.AllowRefreshTokens)
+	})
+}

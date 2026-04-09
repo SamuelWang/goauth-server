@@ -10,6 +10,7 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	auditservice "github.com/SamuelWang/goauth-server/internal/service/audit"
 	authservice "github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
@@ -42,13 +43,24 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	}
 
 	// Initialize services
-	authService, err := authservice.New(repo, cfg, providerSvc)
+	auditService := auditservice.New(repo)
+	authService, err := authservice.New(repo, cfg, providerSvc, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("initializing auth service: %w", err)
 	}
 	userService := user.New(repo)
-	clientService := client.New(repo, cfg.Server.Env)
+	clientService := client.New(repo, cfg.Server.Env, auditService)
 	sessionService := session.New(repo)
+
+	// Bootstrap default admin and client from environment configuration.
+	// These calls are idempotent and skip gracefully when credentials are not
+	// configured or when the resources already exist.
+	if err := BootstrapDefaultAdmin(context.Background(), cfg.Bootstrap, cfg.Server, repo, auditService); err != nil {
+		return nil, fmt.Errorf("bootstrap default admin: %w", err)
+	}
+	if err := BootstrapDefaultClient(context.Background(), cfg.Bootstrap, cfg.Server, repo, auditService); err != nil {
+		return nil, fmt.Errorf("bootstrap default client: %w", err)
+	}
 
 	// Set Gin mode
 	if cfg.Server.Env == "production" {
@@ -76,9 +88,9 @@ func NewServer(cfg *config.Config, dbPool *pgxpool.Pool) (*Server, error) {
 	r.Use(middleware.SecurityHeadersMiddleware(cfg.Server.Env))
 
 	// Register routes
-	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService)
+	api.RegisterRoutes(r, cfg, authService, userService, providerSvc, clientService, sessionService, auditService)
 	web.RegisterRoutes(r, cfg, authService)
-	ops.RegisterRoutes(r)
+	ops.RegisterRoutes(r, cfg)
 
 	s := &Server{
 		router: r,

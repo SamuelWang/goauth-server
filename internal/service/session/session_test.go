@@ -34,10 +34,11 @@ func sampleAuthCode() repository.AuthorizationCode {
 }
 
 func sampleAccessToken() repository.AccessToken {
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "hash123",
-		ClientID:  uuid.New(),
+		ClientID:  &clientID,
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		CreatedAt: time.Now(),

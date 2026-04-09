@@ -8,25 +8,29 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestService(q *mocks.MockQuerier) *Service {
-	return New(q, "development")
+	return New(q, "development", nil)
 }
+
+// sampleClientSecret is the plain-text secret whose SHA-256 hash is stored in
+// sampleClient. Tests that exercise secret validation should use this value.
+const sampleClientSecret = "test-client-secret"
 
 func sampleClient() repository.Client {
 	isActive := true
 	return repository.Client{
 		ID:               uuid.New(),
 		Name:             "test-client",
-		ClientSecretHash: "$2a$12$placeholder",
+		ClientSecretHash: util.SHA256Hex(sampleClientSecret),
 		RedirectUris:     []string{"https://example.com/callback"},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,
@@ -294,7 +298,7 @@ func TestDeleteClient_NotFound(t *testing.T) {
 // --- Secret generation ---
 
 func TestGenerateSecret_IsBase64URL(t *testing.T) {
-	secret, err := generateSecret()
+	secret, err := util.GenerateSecureToken(32)
 	require.NoError(t, err)
 	// 32 bytes base64url-encoded without padding = 43 chars
 	assert.Len(t, secret, 43)
@@ -302,13 +306,25 @@ func TestGenerateSecret_IsBase64URL(t *testing.T) {
 
 func TestHashSecret_MatchesPlain(t *testing.T) {
 	plain := "my-secret"
-	hash, err := hashSecret(plain)
-	require.NoError(t, err)
+	hash := util.SHA256Hex(plain)
 	assert.NotEmpty(t, hash)
-	// Verify the hash actually matches the plain text
-	require.NoError(t, bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)))
-	// Basic structural check: bcrypt hashes start with "$2a$"
-	assert.Contains(t, hash, "$2a$")
+	// SHA-256 hex digest is always 64 characters
+	assert.Len(t, hash, 64)
+	// Deterministic: same input always yields the same hash
+	assert.Equal(t, hash, util.SHA256Hex(plain))
+}
+
+// --- ValidateClientSecret ---
+
+func TestValidateClientSecret_Match(t *testing.T) {
+	plain := "super-secret-value"
+	stored := util.SHA256Hex(plain)
+	assert.True(t, ValidateClientSecret(stored, plain))
+}
+
+func TestValidateClientSecret_Mismatch(t *testing.T) {
+	stored := util.SHA256Hex("correct-secret")
+	assert.False(t, ValidateClientSecret(stored, "wrong-secret"))
 }
 
 // --- Validation errors ---
@@ -353,7 +369,7 @@ func TestUpdateClient_ValidationErrors(t *testing.T) {
 
 func TestCreateClient_ValidationError_ProductionHTTPS(t *testing.T) {
 	q := &mocks.MockQuerier{}
-	svc := New(q, "production")
+	svc := New(q, "production", nil)
 	dto := CreateClientDTO{
 		Name:         "prod-app",
 		RedirectURIs: []string{"http://external.example.com/callback"}, // http in production (non-loopback)

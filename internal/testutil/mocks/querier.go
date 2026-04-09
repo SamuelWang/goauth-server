@@ -258,3 +258,125 @@ func (m *MockQuerier) UpdateUserActiveStatus(ctx context.Context, arg repository
 	args := m.Called(ctx, arg)
 	return args.Get(0).(repository.User), args.Error(1)
 }
+
+// New user methods added in v0.3.0 (sub-tasks 1.5)
+
+func (m *MockQuerier) CountAdminUsers(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQuerier) PromoteUserToAdmin(ctx context.Context, id uuid.UUID) (repository.User, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) GetUserByEmailForAuth(ctx context.Context, email string) (repository.User, error) {
+	args := m.Called(ctx, email)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) IncrementFailedLoginAttempts(ctx context.Context, id uuid.UUID) (repository.User, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) LockUserAccount(ctx context.Context, arg repository.LockUserAccountParams) (repository.User, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) ResetLoginAttempts(ctx context.Context, id uuid.UUID) (repository.User, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) SetForcePasswordChange(ctx context.Context, arg repository.SetForcePasswordChangeParams) (repository.User, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) UnlockUserAccount(ctx context.Context, id uuid.UUID) (repository.User, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+func (m *MockQuerier) UpdatePasswordHash(ctx context.Context, arg repository.UpdatePasswordHashParams) (repository.User, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(repository.User), args.Error(1)
+}
+
+// Refresh token methods added in v0.3.0 (sub-task 1.7)
+
+func (m *MockQuerier) CountRefreshTokensByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQuerier) CreateRefreshToken(ctx context.Context, arg repository.CreateRefreshTokenParams) (repository.RefreshToken, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(repository.RefreshToken), args.Error(1)
+}
+
+func (m *MockQuerier) DeleteExpiredRefreshTokens(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (repository.RefreshToken, error) {
+	args := m.Called(ctx, tokenHash)
+	return args.Get(0).(repository.RefreshToken), args.Error(1)
+}
+
+func (m *MockQuerier) GetRefreshTokenByID(ctx context.Context, id uuid.UUID) (repository.RefreshToken, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(repository.RefreshToken), args.Error(1)
+}
+
+func (m *MockQuerier) ListRefreshTokensByUser(ctx context.Context, arg repository.ListRefreshTokensByUserParams) ([]repository.RefreshToken, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]repository.RefreshToken), args.Error(1)
+}
+
+func (m *MockQuerier) MarkRefreshTokenUsed(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) RevokeRefreshToken(ctx context.Context, arg repository.RevokeRefreshTokenParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) RevokeRefreshTokenFamily(ctx context.Context, arg repository.RevokeRefreshTokenFamilyParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) RevokeRefreshTokensByUser(ctx context.Context, arg repository.RevokeRefreshTokensByUserParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+// Audit log methods added in v0.3.0 (sub-task 1.8)
+
+func (m *MockQuerier) CountAuditLogEntries(ctx context.Context, arg repository.CountAuditLogEntriesParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQuerier) CreateAuditLogEntry(ctx context.Context, arg repository.CreateAuditLogEntryParams) (uuid.UUID, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
+func (m *MockQuerier) ListAuditLogEntries(ctx context.Context, arg repository.ListAuditLogEntriesParams) ([]repository.AuditLog, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]repository.AuditLog), args.Error(1)
+}

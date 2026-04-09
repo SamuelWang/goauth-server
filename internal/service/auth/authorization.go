@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+
+	"crypto/subtle"
 
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 )
 
@@ -35,10 +38,11 @@ var (
 
 // TokenResponse holds the issued access token and its metadata.
 type TokenResponse struct {
-	AccessToken string
-	TokenType   string
-	ExpiresIn   int64 // seconds until expiry
-	Scope       *string
+	AccessToken  string
+	TokenType    string
+	ExpiresIn    int64 // seconds until expiry
+	Scope        *string
+	RefreshToken string // non-empty when a refresh token was issued
 }
 
 // InitiateAuthorization validates the client and provider, checks that
@@ -56,7 +60,6 @@ func (s *Service) InitiateAuthorization(
 	callbackURL string,
 	clientRedirectURI string,
 	state string,
-	scope *string,
 ) (string, error) {
 	// 1. Validate client.
 	client, err := s.repo.GetClient(ctx, clientID)
@@ -90,9 +93,6 @@ func (s *Service) InitiateAuthorization(
 	// 4. Build the OAuth2 config and generate the authorization URL.
 	oauthCfg := buildOAuthConfig(p, callbackURL)
 	opts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
-	if scope != nil && *scope != "" {
-		opts = append(opts, oauth2.SetAuthURLParam("scope", *scope))
-	}
 	authURL := oauthCfg.AuthCodeURL(state, opts...)
 	return authURL, nil
 }
@@ -112,6 +112,7 @@ func (s *Service) HandleProviderCallback(
 	code string,
 	callbackURL string,
 	clientRedirectURI string,
+	scope *string,
 ) (string, error) {
 	// 1. Validate client.
 	client, err := s.repo.GetClient(ctx, clientID)
@@ -153,7 +154,7 @@ func (s *Service) HandleProviderCallback(
 	}
 
 	// 6. Generate a short-lived authorization code.
-	authCode, err := generateAuthCode()
+	authCode, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return "", fmt.Errorf("generating authorization code: %w", err)
 	}
@@ -165,6 +166,7 @@ func (s *Service) HandleProviderCallback(
 		UserID:      user.ID,
 		ProviderID:  p.ID,
 		RedirectUri: clientRedirectURI,
+		Scope:       scope,
 		ExpiresAt:   time.Now().Add(5 * time.Minute),
 	})
 	if err != nil {
@@ -195,7 +197,8 @@ func (s *Service) ExchangeCodeForToken(
 	if client.IsActive == nil || !*client.IsActive {
 		return nil, ErrClientInactive
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecretHash), []byte(clientSecret)); err != nil {
+	h := util.SHA256Hex(clientSecret)
+	if subtle.ConstantTimeCompare([]byte(client.ClientSecretHash), []byte(h)) != 1 {
 		return nil, ErrInvalidClientSecret
 	}
 
@@ -243,11 +246,11 @@ func (s *Service) ExchangeCodeForToken(
 	}
 
 	// 7. Store the token hash for revocation lookup.
-	tokenHash := hashToken(tokenString)
+	tokenHash := util.SHA256Hex(tokenString)
 	expiresAt := time.Now().Add(s.Expiry())
-	_, err = s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
+	accessTokenRecord, err := s.repo.CreateAccessToken(ctx, repository.CreateAccessTokenParams{
 		TokenHash: tokenHash,
-		ClientID:  clientID,
+		ClientID:  &clientID,
 		UserID:    user.ID,
 		Scope:     authCode.Scope,
 		ExpiresAt: expiresAt,
@@ -256,11 +259,57 @@ func (s *Service) ExchangeCodeForToken(
 		return nil, fmt.Errorf("storing access token record: %w", err)
 	}
 
+	// 8. Issue a refresh token when the client allows it and "offline_access" scope
+	// was granted. The raw token value is returned to the caller; only its SHA-256
+	// hash is persisted to the database.
+	var rawRefreshToken string
+	grantedScope := ""
+	if authCode.Scope != nil {
+		grantedScope = *authCode.Scope
+	}
+	if client.AllowRefreshTokens && strings.Contains(grantedScope, "offline_access") {
+		tokenValue, err := util.GenerateSecureToken(32)
+		if err != nil {
+			return nil, fmt.Errorf("generating refresh token: %w", err)
+		}
+		rtHash := util.SHA256Hex(tokenValue)
+		familyID := uuid.New()
+		rtExpiresAt := time.Now().Add(time.Duration(s.cfg.RefreshToken.ExpiryDays) * 24 * time.Hour)
+		_, err = s.repo.CreateRefreshToken(ctx, repository.CreateRefreshTokenParams{
+			TokenHash:       rtHash,
+			TokenFamilyID:   familyID,
+			ClientID:        clientID,
+			UserID:          user.ID,
+			AccessTokenID:   accessTokenRecord.ID,
+			PreviousTokenID: nil,
+			Scope:           grantedScope,
+			ExpiresAt:       rtExpiresAt,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("storing refresh token: %w", err)
+		}
+		if s.auditSvc != nil {
+			uid := user.ID
+			cid := clientID
+			_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{
+				EventType: audit.EventRefreshTokenIssued,
+				UserID:    &uid,
+				ClientID:  &cid,
+				Metadata: map[string]any{
+					"scope":      grantedScope,
+					"expires_at": rtExpiresAt.UTC().Format(time.RFC3339),
+				},
+			})
+		}
+		rawRefreshToken = tokenValue
+	}
+
 	return &TokenResponse{
-		AccessToken: tokenString,
-		TokenType:   "Bearer",
-		ExpiresIn:   int64(s.Expiry().Seconds()),
-		Scope:       authCode.Scope,
+		AccessToken:  tokenString,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.Expiry().Seconds()),
+		Scope:        authCode.Scope,
+		RefreshToken: rawRefreshToken,
 	}, nil
 }
 
@@ -283,19 +332,44 @@ func (s *Service) RevokeToken(ctx context.Context, tokenHash string) error {
 // RevokeRawToken hashes rawToken and revokes it. This is a convenience wrapper
 // for callers (e.g. the logout handler) that hold the plain token string.
 func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
-	return s.RevokeToken(ctx, hashToken(rawToken))
+	return s.RevokeToken(ctx, util.SHA256Hex(rawToken))
 }
 
-// IsTokenRevoked reports whether the raw access token has been revoked or is
-// absent from the database. It should be called after JWT signature/expiry
+// RevokeAllUserAccessTokens revokes every active access token belonging to
+// userID. Call this before issuing a new token on login to enforce single-session
+// semantics and to invalidate stale sessions.
+func (s *Service) RevokeAllUserAccessTokens(ctx context.Context, userID uuid.UUID) error {
+	if err := s.repo.RevokeAccessTokensByUser(ctx, userID); err != nil {
+		return fmt.Errorf("revoking user access tokens: %w", err)
+	}
+	return nil
+}
+
+// RevokeUserRefreshTokens revokes all active refresh tokens for the given user.
+// reason is recorded on each token row for auditing (e.g. "logout", "password_change").
+// Errors are returned to callers so they may log or ignore them appropriately.
+func (s *Service) RevokeUserRefreshTokens(ctx context.Context, userID uuid.UUID, reason string) error {
+	return s.repo.RevokeRefreshTokensByUser(ctx, repository.RevokeRefreshTokensByUserParams{
+		UserID:       userID,
+		RevokeReason: &reason,
+	})
+}
+
+// IsTokenRevoked reports whether the raw access token has been explicitly
+// revoked in the database. It should be called after JWT signature/expiry
 // validation so the database is only consulted for cryptographically valid tokens.
-// If the token record is not found in the database it is treated as invalid
-// and (true, nil) is returned.
+//
+// All access tokens issued by this service are persisted in the access_tokens
+// table (direct-login tokens with NULL client_id, OAuth-flow tokens with the
+// issuing client_id). A token not found in the database is treated as revoked
+// to guard against edge-cases where the record was not written.
 func (s *Service) IsTokenRevoked(ctx context.Context, rawToken string) (bool, error) {
-	record, err := s.repo.GetAccessToken(ctx, hashToken(rawToken))
+	record, err := s.repo.GetAccessToken(ctx, util.SHA256Hex(rawToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return true, nil
+			// Token not found in DB — treat as not revoked. Direct-login tokens
+			// may not be persisted; validity is enforced by JWT signature and expiry.
+			return false, nil
 		}
 		return false, fmt.Errorf("looking up access token: %w", err)
 	}

@@ -2,6 +2,7 @@ package v1
 
 import (
 	"github.com/SamuelWang/goauth-server/internal/middleware"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/service/auth"
 	"github.com/SamuelWang/goauth-server/internal/service/client"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
@@ -12,14 +13,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service) {
-	h := handler.New(authService, userService, providerService, clientService, sessionService)
+func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *user.Service, providerService *provider.Service, clientService *client.Service, sessionService *session.Service, auditSvc *audit.Service) {
+	h := handler.New(authService, userService, providerService, clientService, sessionService, auditSvc)
 
 	// Public auth routes
 	publicAuth := r.Group("/auth")
 	{
 		// Token exchange: 10 requests per minute per IP.
 		publicAuth.POST("/token", middleware.RateLimitByIP(middleware.TokenRatePerMin, middleware.TokenRatePerMin), h.TokenExchange)
+		// Direct login: 10 requests per minute per IP.
+		publicAuth.POST("/login", middleware.RateLimitByIP(middleware.LoginRatePerMin, middleware.LoginRatePerMin), h.Login)
+		// Force-password-change exchange: 10 requests per minute per IP.
+		// The challenge token is the credential; no Authorization header needed.
+		publicAuth.POST("/change-password", middleware.RateLimitByIP(middleware.LoginRatePerMin, middleware.LoginRatePerMin), h.ChangePassword)
+		// RFC 7009 token revocation: caller authenticates via HTTP Basic or Bearer.
+		publicAuth.POST("/revoke", middleware.RateLimitByIP(middleware.TokenRatePerMin, middleware.TokenRatePerMin), h.Revoke)
 	}
 
 	// Public client-scoped routes
@@ -63,6 +71,8 @@ func RegisterRoutes(r *gin.RouterGroup, authService *auth.Service, userService *
 	{
 		usersGroup.GET("", h.ListUsers)
 		usersGroup.PATCH("/:id", h.UpdateUserStatus)
+		usersGroup.DELETE("/:id/lockout", h.UnlockUser)
+		usersGroup.DELETE("/:id/sessions", h.RevokeUserSessions)
 	}
 
 	// Session management routes (admin only)

@@ -153,6 +153,19 @@ func (s *Service) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	return *row.IsAdmin, nil
 }
 
+// UnlockUserAccount clears the lockout on a user account (sets locked_until = NULL).
+// Returns ErrUserNotFound if no user with that ID exists.
+func (s *Service) UnlockUserAccount(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.repo.UnlockUserAccount(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("unlocking user account: %w", err)
+	}
+	return nil
+}
+
 // toUser maps a repository User record to the service model.
 func toUser(r repository.User) User {
 	isAdmin := false

@@ -5,9 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -22,12 +20,12 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/repository"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/SamuelWang/goauth-server/internal/testutil/mocks"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // mockProviderService is a testify mock for the providerServicer interface.
@@ -73,14 +71,14 @@ func newTestService(t *testing.T, q *mocks.MockQuerier, psvc *mockProviderServic
 		},
 	}
 
-	svc, err := New(q, cfg, psvc)
+	svc, err := New(q, cfg, psvc, nil)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 
 	return svc
 }
 
-// activeClient builds a repository.Client marked as active with the given bcrypt secret hash.
+// activeClient builds a repository.Client marked as active with the given SHA-256 secret hash.
 func activeClient(t *testing.T, secretHash string) repository.Client {
 	t.Helper()
 	isActive := true
@@ -95,20 +93,6 @@ func activeClient(t *testing.T, secretHash string) repository.Client {
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
-}
-
-// bcryptHash hashes the given plain secret for use in test fixtures.
-func bcryptHash(t *testing.T, plain string) string {
-	t.Helper()
-	h, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.MinCost)
-	require.NoError(t, err)
-	return string(h)
-}
-
-// tokenHash returns SHA-256 hex of the token string.
-func tokenHash(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
 }
 
 // activeProviderWithSecret returns a provider.OAuthProviderWithSecret whose
@@ -155,7 +139,7 @@ func TestInitiateAuthorization_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	client := activeClient(t, bcryptHash(t, "s3cr3t"))
+	client := activeClient(t, util.SHA256Hex("s3cr3t"))
 	prov := activeProviderWithSecret("https://fake.provider.example.com", client.ID)
 
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
@@ -169,7 +153,6 @@ func TestInitiateAuthorization_Success(t *testing.T) {
 		"https://auth.example.com/web/auth/callback",
 		"https://app.example.com/callback",
 		"random-state",
-		nil,
 	)
 	require.NoError(t, err)
 	assert.Contains(t, authURL, "state=random-state")
@@ -185,7 +168,7 @@ func TestInitiateAuthorization_ClientNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), clientID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrClientNotFound)
 	q.AssertExpectations(t)
 }
@@ -203,7 +186,7 @@ func TestInitiateAuthorization_ClientInactive(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), inactive.ID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrClientInactive)
 }
 
@@ -215,7 +198,7 @@ func TestInitiateAuthorization_InvalidRedirectURI(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com", "https://NOTREGISTERED.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://NOTREGISTERED.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrInvalidRedirectURI)
 }
 
@@ -238,7 +221,7 @@ func TestInitiateAuthorization_ProviderDisabled(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrProviderDisabled)
 }
 
@@ -248,7 +231,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "client-secret-value"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	user := sampleUser()
 
 	isRevoked := false
@@ -272,7 +255,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 	q.On("CreateAccessToken", mock.Anything, mock.Anything).Return(repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "hash",
-		ClientID:  client.ID,
+		ClientID:  &client.ID,
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}, nil)
@@ -295,7 +278,7 @@ func TestExchangeCodeForToken_Success(t *testing.T) {
 func TestExchangeCodeForToken_InvalidClientSecret(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
-	client := activeClient(t, bcryptHash(t, "correct-secret"))
+	client := activeClient(t, util.SHA256Hex("correct-secret"))
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 
 	svc := newTestService(t, q, psvc)
@@ -307,7 +290,7 @@ func TestExchangeCodeForToken_CodeNotFound(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	q.On("GetAuthorizationCode", mock.Anything, "missing-code").Return(repository.AuthorizationCode{}, pgx.ErrNoRows)
 
@@ -320,7 +303,7 @@ func TestExchangeCodeForToken_CodeExpired(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -343,7 +326,7 @@ func TestExchangeCodeForToken_CodeAlreadyUsed(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	usedAt := time.Now().Add(-2 * time.Minute)
 	codeRow := repository.AuthorizationCode{
@@ -367,7 +350,7 @@ func TestExchangeCodeForToken_CodeRevoked(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := true
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -390,7 +373,7 @@ func TestExchangeCodeForToken_ClientMismatch(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -413,7 +396,7 @@ func TestExchangeCodeForToken_RedirectMismatch(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 	const plainSecret = "secret"
-	client := activeClient(t, bcryptHash(t, plainSecret))
+	client := activeClient(t, util.SHA256Hex(plainSecret))
 	isRevoked := false
 	codeRow := repository.AuthorizationCode{
 		ID:          uuid.New(),
@@ -440,13 +423,13 @@ func TestRevokeToken_Success(t *testing.T) {
 
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: tokenHash("my-token"),
+		TokenHash: util.SHA256Hex("my-token"),
 	}
-	q.On("GetAccessToken", mock.Anything, tokenHash("my-token")).Return(tokenRow, nil)
+	q.On("GetAccessToken", mock.Anything, util.SHA256Hex("my-token")).Return(tokenRow, nil)
 	q.On("RevokeAccessToken", mock.Anything, tokenRow.ID).Return(nil)
 
 	svc := newTestService(t, q, psvc)
-	err := svc.RevokeToken(context.Background(), tokenHash("my-token"))
+	err := svc.RevokeToken(context.Background(), util.SHA256Hex("my-token"))
 	require.NoError(t, err)
 	q.AssertExpectations(t)
 }
@@ -468,7 +451,7 @@ func TestRevokeRawToken_Success(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "my-raw-access-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: hash,
@@ -487,7 +470,7 @@ func TestRevokeRawToken_NotFound(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "nonexistent-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	svc := newTestService(t, q, psvc)
@@ -498,18 +481,22 @@ func TestRevokeRawToken_NotFound(t *testing.T) {
 
 // ---- IsTokenRevoked ----
 
-func TestIsTokenRevoked_NotInDB_ReturnsRevoked(t *testing.T) {
+// TestIsTokenRevoked_NotInDB_ReturnsNotRevoked verifies that tokens absent from
+// the access_tokens table are treated as NOT revoked. Direct-login tokens
+// (v0.3.0+) are not persisted; their validity is enforced by JWT
+// signature and expiry only.
+func TestIsTokenRevoked_NotInDB_ReturnsNotRevoked(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
 	rawToken := "unknown-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 
 	svc := newTestService(t, q, psvc)
 	revoked, err := svc.IsTokenRevoked(context.Background(), rawToken)
 	require.NoError(t, err)
-	assert.True(t, revoked, "token not in DB should be treated as revoked")
+	assert.False(t, revoked, "token not in DB should not be treated as revoked")
 	q.AssertExpectations(t)
 }
 
@@ -518,7 +505,7 @@ func TestIsTokenRevoked_ActiveToken_ReturnsFalse(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "active-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	isRevoked := false
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
@@ -539,7 +526,7 @@ func TestIsTokenRevoked_RevokedToken_ReturnsTrue(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "revoked-raw-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	isRevoked := true
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
@@ -560,7 +547,7 @@ func TestIsTokenRevoked_RepoError(t *testing.T) {
 	psvc := &mockProviderService{}
 
 	rawToken := "error-token"
-	hash := tokenHash(rawToken)
+	hash := util.SHA256Hex(rawToken)
 	q.On("GetAccessToken", mock.Anything, hash).Return(repository.AccessToken{}, errors.New("db error"))
 
 	svc := newTestService(t, q, psvc)
@@ -668,6 +655,7 @@ func TestHandleProviderCallback_Success(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
@@ -684,7 +672,7 @@ func TestHandleProviderCallback_ClientInactive(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	assert.ErrorIs(t, err, ErrClientInactive)
 }
 
@@ -706,7 +694,7 @@ func TestNew_Constructor(t *testing.T) {
 		},
 	}
 
-	svc, err := New(q, cfg, psvc)
+	svc, err := New(q, cfg, psvc, nil)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 }
@@ -760,6 +748,7 @@ func TestHandleProviderCallback_ExistingUser(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
@@ -808,6 +797,7 @@ func TestHandleProviderCallback_UserLookupError(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "looking up user")
@@ -825,7 +815,7 @@ func TestInitiateAuthorization_GetClientRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), clientID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting client")
 }
@@ -845,7 +835,7 @@ func TestInitiateAuthorization_GetProviderRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting provider")
 }
@@ -864,10 +854,9 @@ func TestInitiateAuthorization_WithScope(t *testing.T) {
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 
-	scope := "openid email"
 	svc := newTestService(t, q, psvc)
 	url, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", &scope)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.NoError(t, err)
 	assert.NotEmpty(t, url)
 }
@@ -883,7 +872,7 @@ func TestHandleProviderCallback_ClientNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), clientID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.ErrorIs(t, err, ErrClientNotFound)
 }
 
@@ -896,7 +885,7 @@ func TestHandleProviderCallback_GetClientRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), clientID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting client")
 }
@@ -915,7 +904,7 @@ func TestHandleProviderCallback_GetProviderError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting provider")
 }
@@ -936,7 +925,7 @@ func TestHandleProviderCallback_ProviderDisabled(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.ErrorIs(t, err, ErrProviderDisabled)
 }
 
@@ -962,7 +951,7 @@ func TestHandleProviderCallback_ExchangeCodeError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"bad-code", srv.URL+"/token", "https://app.example.com/callback")
+		"bad-code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exchanging provider code")
 }
@@ -993,7 +982,7 @@ func TestHandleProviderCallback_FetchUserInfoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetching user info")
 }
@@ -1035,7 +1024,7 @@ func TestHandleProviderCallback_CreateAuthCodeError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "storing authorization code")
 }
@@ -1080,7 +1069,7 @@ func TestHandleProviderCallback_EmptyLocale(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1118,7 +1107,7 @@ func TestExchangeCodeForToken_AuthCodeRepoError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := bcryptHash(t, "test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
@@ -1134,7 +1123,7 @@ func TestExchangeCodeForToken_MarkUsedError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := bcryptHash(t, "test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 
 	code := repository.AuthorizationCode{
@@ -1159,7 +1148,7 @@ func TestExchangeCodeForToken_GetUserError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := bcryptHash(t, "test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 	userID := uuid.New()
 
@@ -1186,7 +1175,7 @@ func TestExchangeCodeForToken_CreateAccessTokenError(t *testing.T) {
 	q := &mocks.MockQuerier{}
 	psvc := &mockProviderService{}
 
-	secretHash := bcryptHash(t, "test-secret")
+	secretHash := util.SHA256Hex("test-secret")
 	client := activeClient(t, secretHash)
 	user := sampleUser()
 
@@ -1275,7 +1264,7 @@ func TestHandleProviderCallback_UpdateLastLoginError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "updating last login")
 }
@@ -1310,7 +1299,7 @@ func TestHandleProviderCallback_MissingSubInUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1342,7 +1331,7 @@ func TestHandleProviderCallback_MissingEmailInUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1386,7 +1375,7 @@ func TestHandleProviderCallback_NonBoolEmailVerified(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1427,7 +1416,7 @@ func TestHandleProviderCallback_CreateUserError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "creating user")
 }
@@ -1474,7 +1463,7 @@ func TestHandleProviderCallback_UseFirstNameLastName(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1506,7 +1495,7 @@ func TestHandleProviderCallback_InvalidJSONUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1533,7 +1522,7 @@ func TestHandleProviderCallback_InvalidUserInfoURL(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL, "https://app.example.com/callback")
+		"code", srv.URL, "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1565,7 +1554,7 @@ func TestHandleProviderCallback_UserInfoConnRefused(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", tokenSrv.URL, "https://app.example.com/callback")
+		"code", tokenSrv.URL, "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1586,7 +1575,7 @@ func TestInitiateAuthorization_ProviderNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.ErrorIs(t, err, provider.ErrProviderNotFound)
 }
 

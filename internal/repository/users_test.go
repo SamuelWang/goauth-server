@@ -3,135 +3,14 @@ package repository
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/models"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-var testDB *pgxpool.Pool
-var postgresContainer *postgres.PostgresContainer
-
-func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	// Start PostgreSQL container
-	var err error
-	postgresContainer, err = postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("goauth_test"),
-		postgres.WithUsername("postgres"),
-		postgres.WithPassword("postgres"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2),
-		),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nFailed to start postgres container: %v\n", err)
-		fmt.Fprintln(os.Stderr, "\nMake sure Docker is running and you have permission to access it.")
-		fmt.Fprintln(os.Stderr, "You may need to add your user to the docker group:")
-		fmt.Fprintln(os.Stderr, "  sudo usermod -aG docker $USER")
-		fmt.Fprintln(os.Stderr, "  newgrp docker")
-		os.Exit(1)
-	}
-
-	// Get connection string
-	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		panic("failed to get connection string: " + err.Error())
-	}
-
-	// Create connection pool
-	testDB, err = pgxpool.New(ctx, connStr)
-	if err != nil {
-		panic("failed to connect to test database: " + err.Error())
-	}
-
-	// Run migrations
-	if err := runMigrations(ctx, testDB); err != nil {
-		testDB.Close()
-		postgresContainer.Terminate(ctx)
-		panic("failed to run migrations: " + err.Error())
-	}
-
-	// Run tests
-	code := m.Run()
-
-	// Cleanup
-	testDB.Close()
-	if err := postgresContainer.Terminate(ctx); err != nil {
-		fmt.Printf("failed to terminate container: %s\n", err)
-	}
-
-	os.Exit(code)
-}
-
-// runMigrations runs all database migrations in order
-func runMigrations(ctx context.Context, db *pgxpool.Pool) error {
-	// Get the project root directory
-	// Navigate up from internal/repository to the project root
-	wd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	// Go up two levels from internal/repository to project root
-	projectRoot := filepath.Join(wd, "..", "..")
-	migrationsPath := filepath.Join(projectRoot, "db", "migrations")
-
-	// Run all migrations in chronological order
-	migrationFiles := []string{
-		"20260109145607_create_users_table.up.sql",
-		"20260213095938_add_is_admin_to_users.up.sql",
-		"20260213100111_create_clients_table.up.sql",
-		"20260216155147_create_oauth_providers_table.up.sql",
-		"20260216155730_create_authorization_codes_table.up.sql",
-		"20260301120000_create_access_tokens_table.up.sql",
-	}
-
-	for _, file := range migrationFiles {
-		migrationFile := filepath.Join(migrationsPath, file)
-		migrationSQL, err := os.ReadFile(migrationFile)
-		if err != nil {
-			return fmt.Errorf("failed to read migration file %s: %w", file, err)
-		}
-
-		_, err = db.Exec(ctx, string(migrationSQL))
-		if err != nil {
-			return fmt.Errorf("failed to execute migration %s: %w", file, err)
-		}
-	}
-
-	return nil
-}
-
-func setupTest(t *testing.T) (*Queries, func()) {
-	t.Helper()
-
-	// Begin transaction
-	tx, err := testDB.Begin(context.Background())
-	require.NoError(t, err)
-
-	// Create queries instance with transaction
-	queries := New(tx)
-
-	// Return cleanup function
-	cleanup := func() {
-		tx.Rollback(context.Background())
-	}
-
-	return queries, cleanup
-}
 
 func TestCreateUser(t *testing.T) {
 	queries, cleanup := setupTest(t)
@@ -704,6 +583,305 @@ func TestUpdateUserActiveStatus(t *testing.T) {
 			IsActive: false,
 		})
 		// pgx returns no rows error
+		require.Error(t, err)
+	})
+}
+
+func TestGetUserByEmailForAuth(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("returns default zero values for a new user", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_defaults")
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.Equal(t, user.ID, fetched.ID)
+		assert.Equal(t, user.Email, fetched.Email)
+		assert.Nil(t, fetched.PasswordHash)
+		assert.False(t, fetched.ForcePasswordChange)
+		assert.Equal(t, int32(0), fetched.FailedLoginAttempts)
+		assert.Nil(t, fetched.LastFailedLoginAt)
+		assert.Nil(t, fetched.LockedUntil)
+	})
+
+	t.Run("returns all lockout and force-change fields after update", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_fields")
+
+		// Set a password hash
+		hash := "argon2id$v=19$m=65536,t=3,p=4$somesaltvalue$hashedpasswordvalue"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		// Set force_password_change
+		_, err = queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		// Increment failed attempts
+		_, err = queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.Equal(t, user.ID, fetched.ID)
+		assert.NotNil(t, fetched.PasswordHash)
+		assert.Equal(t, hash, *fetched.PasswordHash)
+		assert.True(t, fetched.ForcePasswordChange)
+		assert.Equal(t, int32(1), fetched.FailedLoginAttempts)
+		assert.NotNil(t, fetched.LastFailedLoginAt)
+		assert.Nil(t, fetched.LockedUntil)
+	})
+
+	t.Run("returns locked_until when account is locked", func(t *testing.T) {
+		user := createTestUser(t, queries, "getuserforauth_locked")
+
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		_, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+
+		assert.NotNil(t, fetched.LockedUntil)
+		assert.WithinDuration(t, lockedUntil, *fetched.LockedUntil, time.Second)
+	})
+
+	t.Run("returns error for non-existent email", func(t *testing.T) {
+		_, err := queries.GetUserByEmailForAuth(ctx, "nonexistent_auth@example.com")
+		require.Error(t, err)
+	})
+}
+
+func TestAccountLockoutSequence(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("IncrementFailedLoginAttempts increments counter and sets timestamp", func(t *testing.T) {
+		user := createTestUser(t, queries, "incrattempts")
+		assert.Equal(t, int32(0), user.FailedLoginAttempts)
+		assert.Nil(t, user.LastFailedLoginAt)
+
+		updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(1), updated.FailedLoginAttempts)
+		assert.NotNil(t, updated.LastFailedLoginAt)
+	})
+
+	t.Run("IncrementFailedLoginAttempts accumulates across multiple calls", func(t *testing.T) {
+		user := createTestUser(t, queries, "incrattempts_multi")
+
+		for i := int32(1); i <= 3; i++ {
+			updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+			require.NoError(t, err)
+			assert.Equal(t, i, updated.FailedLoginAttempts)
+		}
+	})
+
+	t.Run("LockUserAccount sets locked_until", func(t *testing.T) {
+		user := createTestUser(t, queries, "lockaccount")
+
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		updated, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		assert.NotNil(t, updated.LockedUntil)
+		assert.WithinDuration(t, lockedUntil, *updated.LockedUntil, time.Second)
+	})
+
+	t.Run("ResetLoginAttempts clears counter, timestamp, and locked_until", func(t *testing.T) {
+		user := createTestUser(t, queries, "resetattempts")
+
+		// Increment attempts twice
+		_, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+		_, err = queries.IncrementFailedLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		// Lock the account
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		_, err = queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+
+		// Reset
+		reset, err := queries.ResetLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(0), reset.FailedLoginAttempts)
+		assert.Nil(t, reset.LastFailedLoginAt)
+		assert.Nil(t, reset.LockedUntil)
+	})
+
+	t.Run("full lockout sequence: increment, lock, verify, reset", func(t *testing.T) {
+		user := createTestUser(t, queries, "lockoutseq")
+
+		// Increment 3 times
+		for i := int32(1); i <= 3; i++ {
+			updated, err := queries.IncrementFailedLoginAttempts(ctx, user.ID)
+			require.NoError(t, err)
+			assert.Equal(t, i, updated.FailedLoginAttempts)
+		}
+
+		// Lock the account
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		locked, err := queries.LockUserAccount(ctx, LockUserAccountParams{
+			ID:          user.ID,
+			LockedUntil: lockedUntil,
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, locked.LockedUntil)
+		assert.Equal(t, int32(3), locked.FailedLoginAttempts)
+
+		// Verify the lock is visible via GetUserByEmailForAuth
+		fetched, err := queries.GetUserByEmailForAuth(ctx, user.Email)
+		require.NoError(t, err)
+		assert.NotNil(t, fetched.LockedUntil)
+		assert.True(t, fetched.LockedUntil.After(time.Now()))
+
+		// Reset clears everything
+		reset, err := queries.ResetLoginAttempts(ctx, user.ID)
+		require.NoError(t, err)
+		assert.Equal(t, int32(0), reset.FailedLoginAttempts)
+		assert.Nil(t, reset.LockedUntil)
+		assert.Nil(t, reset.LastFailedLoginAt)
+	})
+}
+
+func TestUpdatePasswordHash(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("sets password hash on a user without one", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_set")
+		assert.Nil(t, user.PasswordHash)
+
+		hash := "argon2id$v=19$m=65536,t=3,p=4$somesaltvalue$hashedpasswordvalue"
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		assert.NotNil(t, updated.PasswordHash)
+		assert.Equal(t, hash, *updated.PasswordHash)
+	})
+
+	t.Run("replaces an existing password hash", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_replace")
+
+		firstHash := "argon2id$v=19$first_hash"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &firstHash,
+		})
+		require.NoError(t, err)
+
+		secondHash := "argon2id$v=19$second_hash"
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &secondHash,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, secondHash, *updated.PasswordHash)
+	})
+
+	t.Run("clears password hash when set to nil", func(t *testing.T) {
+		user := createTestUser(t, queries, "updatepwhash_clear")
+
+		hash := "argon2id$v=19$initial_hash"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: &hash,
+		})
+		require.NoError(t, err)
+
+		updated, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: nil,
+		})
+		require.NoError(t, err)
+
+		assert.Nil(t, updated.PasswordHash)
+	})
+
+	t.Run("returns error for non-existent user", func(t *testing.T) {
+		hash := "some_hash_value"
+		_, err := queries.UpdatePasswordHash(ctx, UpdatePasswordHashParams{
+			ID:           uuid.New(),
+			PasswordHash: &hash,
+		})
+		require.Error(t, err)
+	})
+}
+
+func TestSetForcePasswordChange(t *testing.T) {
+	queries, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("sets force_password_change to true", func(t *testing.T) {
+		user := createTestUser(t, queries, "setforcepw_true")
+		assert.False(t, user.ForcePasswordChange)
+
+		updated, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		assert.True(t, updated.ForcePasswordChange)
+	})
+
+	t.Run("clears force_password_change back to false", func(t *testing.T) {
+		user := createTestUser(t, queries, "setforcepw_false")
+
+		// Set to true first
+		_, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: true,
+		})
+		require.NoError(t, err)
+
+		// Clear it
+		updated, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  user.ID,
+			ForcePasswordChange: false,
+		})
+		require.NoError(t, err)
+
+		assert.False(t, updated.ForcePasswordChange)
+	})
+
+	t.Run("returns error for non-existent user", func(t *testing.T) {
+		_, err := queries.SetForcePasswordChange(ctx, SetForcePasswordChangeParams{
+			ID:                  uuid.New(),
+			ForcePasswordChange: true,
+		})
 		require.Error(t, err)
 	})
 }

@@ -21,6 +21,8 @@ const (
 	AuthRatePerMin = 20
 	// AdminRatePerMin is the maximum number of admin API requests per minute per authenticated user.
 	AdminRatePerMin = 30
+	// LoginRatePerMin is the maximum number of direct login attempts per minute per IP.
+	LoginRatePerMin = 10
 )
 
 // limiterEntry pairs a rate.Limiter with its last-seen timestamp so stale

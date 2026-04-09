@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ---------------------------------------------------------------------------
@@ -118,14 +118,13 @@ func TestListEnabledProviders_ExcludesSensitiveData(t *testing.T) {
 func buildActiveClientWithSecret(t *testing.T, redirectURI string) (repository.Client, string) {
 	t.Helper()
 	plainSecret := "my-plain-secret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainSecret), bcrypt.MinCost)
-	require.NoError(t, err)
+	hash := util.SHA256Hex(plainSecret)
 
 	isActive := true
 	cl := repository.Client{
 		ID:               uuid.New(),
 		Name:             "test-client",
-		ClientSecretHash: string(hash),
+		ClientSecretHash: hash,
 		RedirectUris:     []string{redirectURI},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,
@@ -166,7 +165,7 @@ func TestTokenExchange_Success(t *testing.T) {
 		Return(repository.AccessToken{
 			ID:        uuid.New(),
 			TokenHash: "some-hash",
-			ClientID:  cl.ID,
+			ClientID:  &cl.ID,
 			UserID:    userID,
 			ExpiresAt: time.Now().Add(time.Hour),
 		}, nil)
@@ -402,9 +401,12 @@ func TestLogout_Success(t *testing.T) {
 	token := env.generateToken(t, userID.String(), "user@example.com")
 	tokenRow := activeTokenRow(token, userID)
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil).Once()
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil).Once()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Once()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Once()
 	env.mockQ.On("RevokeAccessToken", mock.Anything, tokenRow.ID).Return(nil)
+	env.mockQ.On("RevokeRefreshTokensByUser", mock.Anything, mock.MatchedBy(func(arg repository.RevokeRefreshTokensByUserParams) bool {
+		return arg.UserID == userID
+	})).Return(nil)
 
 	w := env.doAuthRequest(http.MethodPost, "/api/v1/auth/logout", nil, token)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -423,7 +425,7 @@ func TestLogout_Unauthorized_RevokedToken(t *testing.T) {
 	userID := uuid.New()
 	token := env.generateToken(t, userID.String(), "user@example.com")
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).
 		Return(revokedTokenRow(token), nil)
 
 	w := env.doAuthRequest(http.MethodPost, "/api/v1/auth/logout", nil, token)
@@ -441,7 +443,7 @@ func TestGetCurrentUser_Success(t *testing.T) {
 	tokenRow := activeTokenRow(token, userID)
 	userRow := buildRegularUser(userID)
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil)
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(userRow, nil)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/auth/me", nil, token)
@@ -547,7 +549,7 @@ func TestGetCurrentUser_UserNotFound(t *testing.T) {
 	token := env.generateToken(t, userID.String(), "user@example.com")
 	tokenRow := activeTokenRow(token, userID)
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(tokenRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil)
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(repository.User{}, pgx.ErrNoRows)
 
 	w := env.doAuthRequest(http.MethodGet, "/api/v1/auth/me", nil, token)

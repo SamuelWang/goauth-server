@@ -50,7 +50,7 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "goauth-server", cfg.App.Name)
-	assert.Equal(t, "0.0.1", cfg.App.Version)
+	assert.Equal(t, "0.3.0", cfg.App.Version)
 	assert.Equal(t, "development", cfg.Server.Env)
 	assert.Equal(t, "http", cfg.Server.Scheme)
 	assert.Equal(t, "localhost", cfg.Server.HostName)
@@ -252,4 +252,288 @@ func TestLoad_CORSAllowedOrigins(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://app.example.com", "https://admin.example.com"}, cfg.Security.CORSAllowedOrigins)
+}
+
+// ---------------------------------------------------------------------------
+// BootstrapConfig defaults
+// ---------------------------------------------------------------------------
+
+func TestLoad_BootstrapDefaults(t *testing.T) {
+	setEnv(t, validRequiredEnv())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.False(t, cfg.Bootstrap.AllowDefaultAdmin)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultAdminEmail)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultAdminPassword)
+	assert.False(t, cfg.Bootstrap.AllowDefaultClient)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultClientID)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultClientSecret)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultClientRedirectURIs)
+	assert.Equal(t, "GoAuth Client", cfg.Bootstrap.DefaultClientName)
+	assert.True(t, cfg.Bootstrap.DefaultClientConfidential)
+}
+
+func TestLoad_BootstrapCustomValues(t *testing.T) {
+	env := validRequiredEnv()
+	env["ALLOW_DEFAULT_ADMIN"] = "true"
+	env["DEFAULT_ADMIN_EMAIL"] = "admin@example.com"
+	env["DEFAULT_ADMIN_PASSWORD"] = "AdminPass1!"
+	env["ALLOW_DEFAULT_CLIENT"] = "true"
+	env["DEFAULT_CLIENT_ID"] = "my-client"
+	env["DEFAULT_CLIENT_SECRET"] = "supersecret"
+	env["DEFAULT_CLIENT_REDIRECT_URIS"] = "https://app.example.com/callback"
+	env["DEFAULT_CLIENT_NAME"] = "My Client"
+	env["DEFAULT_CLIENT_CONFIDENTIAL"] = "false"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Bootstrap.AllowDefaultAdmin)
+	assert.Equal(t, "admin@example.com", cfg.Bootstrap.DefaultAdminEmail)
+	assert.Equal(t, "AdminPass1!", cfg.Bootstrap.DefaultAdminPassword)
+	assert.True(t, cfg.Bootstrap.AllowDefaultClient)
+	assert.Equal(t, "my-client", cfg.Bootstrap.DefaultClientID)
+	assert.Equal(t, "supersecret", cfg.Bootstrap.DefaultClientSecret)
+	assert.Equal(t, "https://app.example.com/callback", cfg.Bootstrap.DefaultClientRedirectURIs)
+	assert.Equal(t, "My Client", cfg.Bootstrap.DefaultClientName)
+	assert.False(t, cfg.Bootstrap.DefaultClientConfidential)
+}
+
+// ---------------------------------------------------------------------------
+// BootstrapConfig – email validation
+// ---------------------------------------------------------------------------
+
+func TestLoad_BootstrapInvalidAdminEmail(t *testing.T) {
+	env := validRequiredEnv()
+	env["DEFAULT_ADMIN_EMAIL"] = "not-a-valid-email"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DEFAULT_ADMIN_EMAIL")
+}
+
+func TestLoad_BootstrapValidAdminEmail(t *testing.T) {
+	env := validRequiredEnv()
+	env["DEFAULT_ADMIN_EMAIL"] = "admin@example.com"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "admin@example.com", cfg.Bootstrap.DefaultAdminEmail)
+}
+
+func TestLoad_BootstrapEmptyAdminEmail_NoError(t *testing.T) {
+	setEnv(t, validRequiredEnv())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.Bootstrap.DefaultAdminEmail)
+}
+
+// ---------------------------------------------------------------------------
+// BootstrapConfig – redirect URI validation
+// ---------------------------------------------------------------------------
+
+func TestLoad_BootstrapInvalidRedirectURI(t *testing.T) {
+	env := validRequiredEnv()
+	env["DEFAULT_CLIENT_REDIRECT_URIS"] = "not a valid uri"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DEFAULT_CLIENT_REDIRECT_URIS")
+}
+
+func TestLoad_BootstrapValidRedirectURI(t *testing.T) {
+	env := validRequiredEnv()
+	env["DEFAULT_CLIENT_REDIRECT_URIS"] = "https://app.example.com/callback,https://other.example.com/cb"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://app.example.com/callback,https://other.example.com/cb", cfg.Bootstrap.DefaultClientRedirectURIs)
+}
+
+func TestLoad_BootstrapRedirectURIWithInvalidEntry(t *testing.T) {
+	env := validRequiredEnv()
+	env["DEFAULT_CLIENT_REDIRECT_URIS"] = "https://good.example.com/cb, ://bad-uri"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DEFAULT_CLIENT_REDIRECT_URIS")
+}
+
+// ---------------------------------------------------------------------------
+// RefreshTokenConfig – defaults and parsing
+// ---------------------------------------------------------------------------
+
+func TestLoad_RefreshTokenDefaults(t *testing.T) {
+	setEnv(t, validRequiredEnv())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 30, cfg.RefreshToken.ExpiryDays)
+	assert.True(t, cfg.RefreshToken.RotationEnabled)
+	assert.Equal(t, 90, cfg.RefreshToken.MaxLifetimeDays)
+}
+
+func TestLoad_RefreshTokenCustomValues(t *testing.T) {
+	env := validRequiredEnv()
+	env["REFRESH_TOKEN_EXPIRY_DAYS"] = "14"
+	env["REFRESH_TOKEN_ROTATION_ENABLED"] = "false"
+	env["REFRESH_TOKEN_MAX_LIFETIME_DAYS"] = "60"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 14, cfg.RefreshToken.ExpiryDays)
+	assert.False(t, cfg.RefreshToken.RotationEnabled)
+	assert.Equal(t, 60, cfg.RefreshToken.MaxLifetimeDays)
+}
+
+func TestLoad_RefreshTokenExpiryDays_NonNumeric(t *testing.T) {
+	env := validRequiredEnv()
+	env["REFRESH_TOKEN_EXPIRY_DAYS"] = "not-a-number"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "REFRESH_TOKEN_EXPIRY_DAYS")
+}
+
+func TestLoad_RefreshTokenMaxLifetimeDays_NonNumeric(t *testing.T) {
+	env := validRequiredEnv()
+	env["REFRESH_TOKEN_MAX_LIFETIME_DAYS"] = "abc"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "REFRESH_TOKEN_MAX_LIFETIME_DAYS")
+}
+
+// ---------------------------------------------------------------------------
+// LockoutConfig – defaults and parsing
+// ---------------------------------------------------------------------------
+
+func TestLoad_LockoutDefaults(t *testing.T) {
+	setEnv(t, validRequiredEnv())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 5, cfg.Lockout.MaxAttempts)
+	assert.Equal(t, 600, cfg.Lockout.WindowSeconds)
+	assert.Equal(t, 900, cfg.Lockout.DurationSeconds)
+}
+
+func TestLoad_LockoutCustomValues(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_MAX_ATTEMPTS"] = "10"
+	env["LOGIN_ATTEMPT_WINDOW_SECONDS"] = "300"
+	env["LOGIN_LOCKOUT_DURATION_SECONDS"] = "1800"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 10, cfg.Lockout.MaxAttempts)
+	assert.Equal(t, 300, cfg.Lockout.WindowSeconds)
+	assert.Equal(t, 1800, cfg.Lockout.DurationSeconds)
+}
+
+func TestLoad_LockoutMaxAttempts_NonNumeric(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_MAX_ATTEMPTS"] = "abc"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_MAX_ATTEMPTS")
+}
+
+func TestLoad_LockoutWindowSeconds_NonNumeric(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_ATTEMPT_WINDOW_SECONDS"] = "not-a-number"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_ATTEMPT_WINDOW_SECONDS")
+}
+
+func TestLoad_LockoutDurationSeconds_NonNumeric(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_LOCKOUT_DURATION_SECONDS"] = "xyz"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_LOCKOUT_DURATION_SECONDS")
+}
+
+func TestLoad_LockoutMaxAttempts_Zero(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_MAX_ATTEMPTS"] = "0"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_MAX_ATTEMPTS")
+}
+
+func TestLoad_LockoutMaxAttempts_Negative(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_MAX_ATTEMPTS"] = "-1"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_MAX_ATTEMPTS")
+}
+
+func TestLoad_LockoutWindowSeconds_Zero(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_ATTEMPT_WINDOW_SECONDS"] = "0"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_ATTEMPT_WINDOW_SECONDS")
+}
+
+func TestLoad_LockoutWindowSeconds_Negative(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_ATTEMPT_WINDOW_SECONDS"] = "-300"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_ATTEMPT_WINDOW_SECONDS")
+}
+
+func TestLoad_LockoutDurationSeconds_Zero(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_LOCKOUT_DURATION_SECONDS"] = "0"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_LOCKOUT_DURATION_SECONDS")
+}
+
+func TestLoad_LockoutDurationSeconds_Negative(t *testing.T) {
+	env := validRequiredEnv()
+	env["LOGIN_LOCKOUT_DURATION_SECONDS"] = "-900"
+	setEnv(t, env)
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOGIN_LOCKOUT_DURATION_SECONDS")
 }

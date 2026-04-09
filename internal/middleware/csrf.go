@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"net/http"
 
@@ -96,8 +95,8 @@ func CSRFMiddleware() gin.HandlerFunc {
 
 // generateCSRFToken returns a cryptographically random hex-encoded token.
 func generateCSRFToken() (string, error) {
-	b := make([]byte, csrfTokenBytes)
-	if _, err := rand.Read(b); err != nil {
+	b, err := util.GenerateRandomBytes(csrfTokenBytes)
+	if err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil

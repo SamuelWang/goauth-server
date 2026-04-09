@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -41,7 +39,7 @@ func (h *WebHandler) Login(c *gin.Context) {
 		scopePtr = &s
 	}
 
-	state, err := generateRandomState()
+	state, err := util.GenerateSecureToken(32)
 	if err != nil {
 		log.Printf("Login: failed to generate state: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -57,7 +55,6 @@ func (h *WebHandler) Login(c *gin.Context) {
 		callbackURL,
 		redirectURI,
 		state,
-		scopePtr,
 	)
 	if err != nil {
 		h.handleLoginError(c, err)
@@ -70,6 +67,7 @@ func (h *WebHandler) Login(c *gin.Context) {
 		ClientID:    clientID.String(),
 		Provider:    providerName,
 		RedirectURI: redirectURI,
+		Scope:       scopePtr,
 	}
 	cookieVal, err := encodeSession(session, h.signingKey)
 	if err != nil {
@@ -162,6 +160,7 @@ func (h *WebHandler) Callback(c *gin.Context) {
 		code,
 		callbackURL,
 		session.RedirectURI,
+		session.Scope,
 	)
 	if err != nil {
 		h.handleCallbackError(c, err)
@@ -238,12 +237,4 @@ func (h *WebHandler) handleCallbackError(c *gin.Context, err error) {
 		log.Printf("Callback: unexpected error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "authentication failed"})
 	}
-}
-
-func generateRandomState() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
 }

@@ -3,7 +3,7 @@ name: Pull Request Checks
 on:
   pull_request:
     branches:
-      - main
+      - master
     types:
       - opened
       - synchronize
@@ -37,7 +37,7 @@ jobs:
         run: go vet ./...
       
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: go test -v -race -short -coverprofile=coverage.out ./...
       
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

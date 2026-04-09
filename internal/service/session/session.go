@@ -31,7 +31,7 @@ type AuthorizationCode struct {
 // returned directly in API responses.
 type AccessToken struct {
 	ID        uuid.UUID
-	ClientID  uuid.UUID
+	ClientID  *uuid.UUID
 	UserID    uuid.UUID
 	Scope     *string
 	ExpiresAt time.Time

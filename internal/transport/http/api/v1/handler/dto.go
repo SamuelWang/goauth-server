@@ -67,12 +67,22 @@ type TokenExchangeRequest struct {
 	RedirectURI  string `json:"redirect_uri" binding:"required"`
 }
 
+// RefreshTokenGrantRequest is the request body for POST /api/v1/auth/token
+// when grant_type is "refresh_token".
+type RefreshTokenGrantRequest struct {
+	GrantType    string `json:"grant_type" binding:"required"`
+	RefreshToken string `json:"refresh_token" binding:"required"`
+	ClientID     string `json:"client_id" binding:"required"`
+	ClientSecret string `json:"client_secret" binding:"required"`
+}
+
 // TokenExchangeResponse is the OAuth 2.0 token endpoint response.
 type TokenExchangeResponse struct {
-	AccessToken string  `json:"access_token"`
-	TokenType   string  `json:"token_type"`
-	ExpiresIn   int64   `json:"expires_in"`
-	Scope       *string `json:"scope,omitempty"`
+	AccessToken  string  `json:"access_token"`
+	TokenType    string  `json:"token_type"`
+	ExpiresIn    int64   `json:"expires_in"`
+	Scope        *string `json:"scope,omitempty"`
+	RefreshToken string  `json:"refresh_token,omitempty"`
 }
 
 // --- Public provider list ---
@@ -218,4 +228,27 @@ type AccessTokenResponse struct {
 type ListAccessTokensResponse struct {
 	Tokens []AccessTokenResponse `json:"tokens"`
 	Total  int64                 `json:"total"`
+}
+
+// --- Direct login ---
+
+// LoginRequest is the request body for POST /api/v1/auth/login.
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// LoginResponse is returned on a successful direct login.
+type LoginResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+}
+
+// --- Force password change ---
+
+// ChangePasswordRequest is the request body for POST /api/v1/auth/change-password.
+type ChangePasswordRequest struct {
+	ChallengeToken string `json:"challenge_token" binding:"required"`
+	NewPassword    string `json:"new_password" binding:"required"`
 }

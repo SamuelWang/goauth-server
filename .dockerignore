@@ -18,7 +18,6 @@ coverage.out
 # ─── Documentation ────────────────────────────────────────────────────────────
 docs/
 docs-planning/
-docs-swagger/
 README.md
 LICENSE
 

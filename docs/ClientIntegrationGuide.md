@@ -1,9 +1,10 @@
-# Client Integration Guide — Goauth Server v0.2.0
+# Client Integration Guide — Goauth Server v0.3.0
 
 ## Document Information
 
-* **Version:** 0.2.0
+* **Version:** 0.3.0
 * **Created:** March 11, 2026
+* **Updated:** April 1, 2026
 * **Project:** Goauth Server
 
 ---
@@ -22,15 +23,29 @@
    - [Step 4 — Exchange the Code for a Token](#64-step-4--exchange-the-code-for-a-token)
    - [Step 5 — Use the Access Token](#65-step-5--use-the-access-token)
    - [Step 6 — Logout](#66-step-6--logout)
-7. [Error Handling](#7-error-handling)
-8. [Security Considerations](#8-security-considerations)
-9. [Complete Code Examples](#9-complete-code-examples)
-   - [TypeScript / JavaScript (Browser + Node.js)](#91-typescript--javascript-browser--nodejs)
-   - [Python](#92-python)
-   - [Go](#93-go)
-10. [Multi-Provider Setup Example](#10-multi-provider-setup-example)
-11. [Provider Isolation Between Clients](#11-provider-isolation-between-clients)
-12. [API Reference Summary](#12-api-reference-summary)
+7. [Email & Password Login](#7-email--password-login)
+   - [Login Request](#71-login-request)
+   - [Force Password Change Response](#72-force-password-change-response)
+   - [Error Responses](#73-error-responses)
+   - [Account Lockout](#74-account-lockout)
+   - [Password Complexity Policy](#75-password-complexity-policy)
+8. [Force Password Change](#8-force-password-change)
+9. [Refresh Tokens & Token Revocation](#9-refresh-tokens--token-revocation)
+   - [Requesting a Refresh Token](#91-requesting-a-refresh-token)
+   - [Using the Refresh Grant](#92-using-the-refresh-grant)
+   - [Refresh Token Rotation](#93-refresh-token-rotation)
+   - [Replay Detection](#94-replay-detection)
+   - [RFC 7009 Revocation](#95-rfc-7009-revocation)
+   - [Refresh Token Storage Guidance](#96-refresh-token-storage-guidance)
+10. [Error Handling](#10-error-handling)
+11. [Security Considerations](#11-security-considerations)
+12. [Complete Code Examples](#12-complete-code-examples)
+    - [TypeScript / JavaScript (Browser + Node.js)](#121-typescript--javascript-browser--nodejs)
+    - [Python](#122-python)
+    - [Go](#123-go)
+13. [Multi-Provider Setup Example](#13-multi-provider-setup-example)
+14. [Provider Isolation Between Clients](#14-provider-isolation-between-clients)
+15. [API Reference Summary](#15-api-reference-summary)
 
 ---
 
@@ -270,7 +285,8 @@ Content-Type: application/json
   "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type":   "Bearer",
   "expires_in":   3600,
-  "scope":        "openid email profile"
+  "scope":        "openid email profile offline_access",
+  "refresh_token": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
 }
 ```
 
@@ -280,6 +296,7 @@ Content-Type: application/json
 | `token_type` | Always `"Bearer"` |
 | `expires_in` | Seconds until the token expires (default: 3600) |
 | `scope` | OAuth scopes granted (may be absent if no scope was requested) |
+| `refresh_token` | Long-lived opaque token for obtaining new access tokens without re-authenticating. Only present when (a) the granted scope includes `offline_access` **and** (b) the client has `allow_refresh_tokens=true`. |
 
 > **Rate limit:** 10 requests per minute per IP address.
 
@@ -350,7 +367,267 @@ After logout, discard the access token from your application state and clear any
 
 ---
 
-## 7. Error Handling
+## 7. Email & Password Login
+
+v0.3.0 introduces a direct email and password login endpoint as an alternative to the OAuth Authorization Code Flow. This endpoint is useful when users have a local password stored in Goauth (e.g. bootstrapped admin accounts or accounts with a password set via the force-password-change flow).
+
+### 7.1 Login Request
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "<plaintext_password>"
+}
+```
+
+**Normal success response (HTTP 200):**
+
+```json
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type":   "Bearer",
+  "expires_in":   3600,
+  "refresh_token": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
+}
+```
+
+The `refresh_token` field is only present when the client has `allow_refresh_tokens=true` and the `offline_access` scope applies.
+
+### 7.2 Force Password Change Response
+
+When the authenticated user has `force_password_change=true` (e.g. a bootstrapped account), the login endpoint returns a challenge token instead of an access token:
+
+```json
+{
+  "challenge_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "require": "password_change"
+}
+```
+
+- The challenge token is a short-lived HS256 JWT (15-minute expiry, `typ=password_change` claim).
+- Use it with `POST /api/v1/auth/change-password` to set a new password and receive an access token (see §8).
+- The challenge token is single-use — after a successful password change, it cannot be reused.
+
+### 7.3 Error Responses
+
+| HTTP Status | `error` value | Cause |
+|---|---|---|
+| `400` | `invalid_request` | Missing or malformed `email` field (must be a valid email address) |
+| `401` | `invalid_credentials` | Wrong email or password — generic message regardless of which failed |
+| `429` | `account_locked` | Account is locked due to too many failed attempts |
+
+> **Security note:** The `401` response uses a generic message for both unknown email and wrong password. This is intentional — distinguishing between the two would allow enumeration of registered emails.
+
+### 7.4 Account Lockout
+
+After `LOGIN_MAX_ATTEMPTS` consecutive failures within `LOGIN_ATTEMPT_WINDOW_SECONDS`, the account is locked:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: Fri, 01 Apr 2026 10:15:30 GMT
+Content-Type: application/json
+
+{
+  "error": "account_locked",
+  "retry_after": "Fri, 01 Apr 2026 10:15:30 GMT"
+}
+```
+
+The `Retry-After` header and `retry_after` body field are both RFC 1123 HTTP-dates indicating when the lockout expires. Parse this value to display a countdown to your users.
+
+During an active lockout, the password is **not** checked — every attempt returns `429` immediately. This prevents timing attacks from revealing whether the password was correct.
+
+### 7.5 Password Complexity Policy
+
+Passwords set through Goauth (in the change-password flow or admin bootstrap) must meet all of the following requirements:
+
+| Rule | Requirement |
+|---|---|
+| Minimum length | 12 characters |
+| Uppercase letter | At least 1 (A–Z) |
+| Lowercase letter | At least 1 (a–z) |
+| Digit | At least 1 (0–9) |
+| Special character | At least 1 from the allowed set |
+| Common password deny-list | Must not appear in the OWASP/NIST top common-passwords list |
+| Email substring | Must not contain the user's email local-part (case-insensitive) |
+
+Violations return `400` with a descriptive error message identifying the failed rule(s).
+
+---
+
+## 8. Force Password Change
+
+The force-password-change flow applies to:
+- Accounts created via automated bootstrap (`force_password_change=true` by default).
+- Accounts where an administrator has set the flag.
+
+### Flow
+
+1. Call `POST /api/v1/auth/login` — receive `{ "challenge_token": "...", "require": "password_change" }`.
+2. Present a "Set New Password" screen in your application UI.
+3. Submit the challenge token and new password:
+
+```http
+POST /api/v1/auth/change-password
+Content-Type: application/json
+
+{
+  "challenge_token": "<token_from_login_response>",
+  "new_password": "MyNewStrong@Pass2026"
+}
+```
+
+**Success response (HTTP 200):**
+
+```json
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type":   "Bearer",
+  "expires_in":   3600
+}
+```
+
+After a successful password change:
+- `force_password_change` is cleared in the database.
+- All existing refresh tokens for the user are revoked.
+- A new access token is returned — proceed as a normal authenticated session.
+
+**Error responses:**
+
+| HTTP Status | `error` | Cause |
+|---|---|---|
+| `400` | `invalid_request` | Challenge token is invalid, malformed, or expired (15-minute lifetime) |
+| `400` | `weak_password` | New password fails the complexity policy |
+| `409` | `already_completed` | `force_password_change` was already false — token was already consumed |
+
+> **Note:** The endpoint does not require a Bearer token. The challenge token itself is the credential.
+
+---
+
+## 9. Refresh Tokens & Token Revocation
+
+Refresh tokens allow clients to obtain new access tokens without requiring the user to re-authenticate via the OAuth flow.
+
+### 9.1 Requesting a Refresh Token
+
+Two conditions must both be met:
+
+1. The client must have `allow_refresh_tokens=true` (set by administrator).
+2. The authorization request (or login) must include `offline_access` in the scope.
+
+**In the authorization code flow** (Step 2), include `offline_access` in the scope parameter:
+
+```
+https://auth.example.com/web/auth/{client_id}/google/login
+  ?redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback
+  &scope=openid%20email%20profile%20offline_access
+```
+
+When both conditions are met, the token exchange response includes a `refresh_token` field (see §6.4).
+
+### 9.2 Using the Refresh Grant
+
+Exchange a refresh token for a new access token:
+
+```http
+POST /api/v1/auth/token
+Content-Type: application/json
+
+{
+  "grant_type":    "refresh_token",
+  "refresh_token": "<refresh_token_value>",
+  "client_id":     "550e8400-e29b-41d4-a716-446655440000",
+  "client_secret": "<your_client_secret>"
+}
+```
+
+**Success response (HTTP 200):**
+
+```json
+{
+  "access_token":  "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type":    "Bearer",
+  "expires_in":    3600,
+  "refresh_token": "nEwReFrEsHtOkEn..."
+}
+```
+
+The response always includes a new `refresh_token` — see §9.3 for rotation semantics.
+
+**Error responses:**
+
+| HTTP Status | `error` | Cause |
+|---|---|---|
+| `400` | `invalid_grant` | Token not found, expired, revoked, or replayed |
+| `400` | `invalid_grant` | `client_id` does not match the token's issuing client |
+| `401` | `invalid_client` | Client credentials rejected |
+
+### 9.3 Refresh Token Rotation
+
+Goauth uses **rotate-on-use** semantics (when `REFRESH_TOKEN_ROTATION_ENABLED=true`, which is the default):
+
+- Each successful use of a refresh token immediately marks it as `is_revoked=true` (reason: `"used"`).
+- A new refresh token is issued in its place.
+- Store the new token; discard the old one.
+
+This means a valid refresh token can only be used **once**. Attempting to use it a second time triggers replay detection.
+
+### 9.4 Replay Detection
+
+If a client presents a refresh token that has already been rotated (i.e. `is_revoked=true` with reason `"used"`):
+
+1. The server revokes the **entire token family** — all refresh tokens in the chain.
+2. A `replay_detected` and `refresh_token_family_revoked` audit event are written.
+3. The response is `400 invalid_grant`.
+
+This protects against token theft: if an attacker obtains and uses a stolen refresh token, the legitimate client's next rotation attempt will also fail, alerting both parties that a compromise has occurred.
+
+**Client handling:** On any `invalid_grant` response from the refresh grant, clear all stored tokens and re-authenticate via the authorization code flow.
+
+### 9.5 RFC 7009 Revocation
+
+Explicitly revoke a token (e.g. on user logout):
+
+```http
+POST /api/v1/auth/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <base64(client_id:client_secret)>
+
+token=<refresh_or_access_token>&token_type_hint=refresh_token
+```
+
+Alternatively, authenticate with a Bearer access token:
+
+```http
+POST /api/v1/auth/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer <access_token>
+
+token=<refresh_token>&token_type_hint=refresh_token
+```
+
+**Response:** Always `200 OK` — even if the token is not found (per RFC 7009). The only error response is `401 Unauthorized` for unauthenticated requests.
+
+**Behaviour:**
+- If the token is a refresh token: revokes the refresh token and its linked access token (if any).
+- If the token is an access token: revokes only that access token.
+- Unknown token: `200 OK` with no action.
+
+### 9.6 Refresh Token Storage Guidance
+
+Treat refresh tokens with the same care as passwords:
+
+- **Server-side apps:** Store in the server-side session alongside the access token. Never send to the browser.
+- **SPAs / mobile apps:** If you must store in the browser, use an `HttpOnly`, `Secure`, `SameSite=Strict` cookie set from your backend server. Never store in `localStorage` or `sessionStorage`.
+- Revoke on logout, password change, and suspicious activity.
+- Implement a silent refresh that exchanges the refresh token proactively before the access token expires.
+
+---
+
+## 10. Error Handling
 
 ### Token Exchange Errors
 
@@ -359,8 +636,8 @@ The token endpoint returns OAuth 2.0-compliant error responses:
 | HTTP Status | `error` | Cause |
 |---|---|---|
 | 400 | `invalid_request` | Missing or malformed request parameters |
-| 400 | `unsupported_grant_type` | `grant_type` is not `"authorization_code"` |
-| 400 | `invalid_grant` | Code is expired, already used, revoked, or `redirect_uri`/`client_id` mismatch |
+| 400 | `unsupported_grant_type` | `grant_type` is not `"authorization_code"` or `"refresh_token"` |
+| 400 | `invalid_grant` | Code is expired, already used, revoked, or `redirect_uri`/`client_id` mismatch; or refresh token is expired/revoked/replayed |
 | 401 | `invalid_client` | `client_id` not found, client inactive, or wrong `client_secret` |
 | 500 | `server_error` | Internal server error (retry with backoff) |
 
@@ -410,7 +687,7 @@ State-changing requests without a valid CSRF token return HTTP 403. Ensure you a
 
 ---
 
-## 8. Security Considerations
+## 11. Security Considerations
 
 ### Protect Your Client Secret
 
@@ -442,17 +719,21 @@ For any state-changing request to Goauth (`POST /api/v1/auth/logout`, etc.), rea
 
 ### Token Expiry and Refresh
 
-Access tokens expire in 60 minutes by default. Goauth does not currently issue refresh tokens. When a token expires:
+Access tokens expire in 60 minutes by default. v0.3.0 introduces refresh tokens — when your client has `allow_refresh_tokens=true` and the user grants `offline_access` scope, you receive a `refresh_token` alongside the access token. Use the `grant_type=refresh_token` exchange to obtain a new access token silently (see §9). When a token expires and no refresh token is available:
 1. Catch the HTTP 401 response.
 2. Redirect the user to begin a new login flow.
 
-For long-running sessions, consider initiating a silent re-auth (in a hidden iframe or via a prompt-less redirect) if your provider supports it.
+**Refresh token security:**
+- Each use of a refresh token issues a new one (rotation). Store only the latest token.
+- Revoke the refresh token on logout via `POST /api/v1/auth/revoke`.
+- On `invalid_grant` from the refresh grant, clear all stored tokens and re-authenticate.
+- Never store refresh tokens in `localStorage` or `sessionStorage`.
 
 ---
 
-## 9. Complete Code Examples
+## 12. Complete Code Examples
 
-### 9.1 TypeScript / JavaScript (Browser + Node.js)
+### 12.1 TypeScript / JavaScript (Browser + Node.js)
 
 The following example uses plain `fetch`. Adapt to your framework as needed.
 
@@ -571,6 +852,129 @@ async function getCurrentUser(accessToken: string) {
 }
 ```
 
+#### Email & password login with force-password-change handling
+
+```typescript
+interface LoginResult {
+  type: "success";
+  accessToken: string;
+  refreshToken?: string;
+} | {
+  type: "force_password_change";
+  challengeToken: string;
+}
+
+async function loginUser(email: string, password: string): Promise<LoginResult> {
+  const res = await fetch(`${GOAUTH_BASE}/api/v1/auth/login`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ email, password }),
+  });
+
+  const data = await res.json();
+
+  if (res.status === 429) {
+    const retryAfter = res.headers.get("Retry-After");
+    throw new Error(`Account locked. Retry after: ${retryAfter ?? "unknown"}`);
+  }
+
+  if (res.status === 401) {
+    throw new Error("Invalid email or password.");
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error ?? "Login failed");
+  }
+
+  if (data.require === "password_change") {
+    return { type: "force_password_change", challengeToken: data.challenge_token };
+  }
+
+  return { type: "success", accessToken: data.access_token, refreshToken: data.refresh_token };
+}
+```
+
+#### Force-password-change completion
+
+```typescript
+async function changePassword(challengeToken: string, newPassword: string): Promise<string> {
+  const res = await fetch(`${GOAUTH_BASE}/api/v1/auth/change-password`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ challenge_token: challengeToken, new_password: newPassword }),
+  });
+
+  const data = await res.json();
+
+  if (res.status === 409) {
+    throw new Error("Password change already completed. Please log in again.");
+  }
+  if (res.status === 400) {
+    throw new Error(data.error_description ?? "Password does not meet policy requirements.");
+  }
+  if (!res.ok) {
+    throw new Error(data.error ?? "Password change failed");
+  }
+
+  return data.access_token as string;
+}
+```
+
+#### Refresh token rotation
+
+```typescript
+async function refreshAccessToken(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const res = await fetch(`${GOAUTH_BASE}/api/v1/auth/token`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({
+      grant_type:    "refresh_token",
+      refresh_token: refreshToken,
+      client_id:     clientId,
+      client_secret: clientSecret,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    // 400 invalid_grant — token expired, revoked, or replayed.
+    // Clear all tokens and force re-authentication.
+    throw new Error(err.error ?? "Token refresh failed");
+  }
+
+  const data = await res.json();
+  return { accessToken: data.access_token, refreshToken: data.refresh_token };
+}
+```
+
+#### Revoke token on logout
+
+```typescript
+async function revokeToken(
+  token: string,
+  tokenTypeHint: "refresh_token" | "access_token",
+  clientId: string,
+  clientSecret: string
+): Promise<void> {
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+  const body = new URLSearchParams({ token, token_type_hint: tokenTypeHint });
+
+  await fetch(`${GOAUTH_BASE}/api/v1/auth/revoke`, {
+    method:  "POST",
+    headers: {
+      Authorization:  `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+  // Always 200 per RFC 7009; no error handling needed.
+}
+```
+
 #### Logout
 
 ```typescript
@@ -601,7 +1005,7 @@ async function logout(accessToken: string): Promise<void> {
 
 ---
 
-### 9.2 Python
+### 12.2 Python
 
 ```python
 import os
@@ -702,7 +1106,7 @@ def logout():
 
 ---
 
-### 9.3 Go
+### 12.3 Go
 
 ```go
 package main
@@ -827,7 +1231,7 @@ func main() {
 
 ---
 
-## 10. Multi-Provider Setup Example
+## 13. Multi-Provider Setup Example
 
 This section shows how to present multiple login options when your client has Google and GitHub configured.
 
@@ -880,7 +1284,7 @@ The same user is matched by email across providers — a user who logs in with G
 
 ---
 
-## 11. Provider Isolation Between Clients
+## 14. Provider Isolation Between Clients
 
 Providers configured for Client A are completely isolated from Client B:
 
@@ -907,7 +1311,7 @@ GET /web/auth/CLIENT_A_ID/github/login?redirect_uri=...
 
 ---
 
-## 12. API Reference Summary
+## 15. API Reference Summary
 
 The following endpoints are relevant to client integrations. For full Swagger documentation, visit `/api/docs/index.html` on your Goauth server.
 
@@ -918,7 +1322,10 @@ The following endpoints are relevant to client integrations. For full Swagger do
 | `GET` | `/api/v1/clients/{client_id}/auth/providers` | List enabled providers for a client |
 | `GET` | `/web/auth/{client_id}/{provider}/login` | Initiate OAuth flow (browser redirect) |
 | `GET` | `/web/auth/{client_id}/{provider}/callback` | OAuth provider callback (used by IdP, not your app) |
-| `POST` | `/api/v1/auth/token` | Exchange authorization code for access token |
+| `POST` | `/api/v1/auth/token` | Exchange authorization code or refresh token for access token |
+| `POST` | `/api/v1/auth/login` | Email and password login |
+| `POST` | `/api/v1/auth/change-password` | Complete force-password-change flow using a challenge token |
+| `POST` | `/api/v1/auth/revoke` | Revoke a refresh or access token (RFC 7009) |
 
 ### Authenticated Endpoints (Bearer Token Required)
 
@@ -929,7 +1336,7 @@ The following endpoints are relevant to client integrations. For full Swagger do
 
 ### Request / Response Schemas
 
-**`POST /api/v1/auth/token` — Request body:**
+**`POST /api/v1/auth/token` — Authorization Code Request body:**
 
 ```json
 {
@@ -941,15 +1348,42 @@ The following endpoints are relevant to client integrations. For full Swagger do
 }
 ```
 
+**`POST /api/v1/auth/token` — Refresh Token Request body:**
+
+```json
+{
+  "grant_type":    "refresh_token",
+  "refresh_token": "string",
+  "client_id":     "uuid",
+  "client_secret": "string"
+}
+```
+
 **`POST /api/v1/auth/token` — Success response:**
 
 ```json
 {
-  "access_token": "string",
-  "token_type":   "Bearer",
-  "expires_in":   3600,
-  "scope":        "string (optional)"
+  "access_token":  "string",
+  "token_type":    "Bearer",
+  "expires_in":    3600,
+  "scope":         "string (optional)",
+  "refresh_token": "string (optional, when offline_access granted)"
 }
+```
+
+**`POST /api/v1/auth/login` — Request body:**
+
+```json
+{
+  "email":    "string",
+  "password": "string"
+}
+```
+
+**`POST /api/v1/auth/revoke` — Request body (form-encoded):**
+
+```
+token=<value>&token_type_hint=refresh_token
 ```
 
 **`GET /api/v1/auth/me` — Success response:**
@@ -973,13 +1407,16 @@ The following endpoints are relevant to client integrations. For full Swagger do
 | Header | When Required | Description |
 |---|---|---|
 | `Authorization: Bearer <token>` | Authenticated endpoints | Access token from token exchange |
+| `Authorization: Basic <b64(id:secret)>` | `POST /api/v1/auth/revoke` (client auth) | Base64-encoded `client_id:client_secret` |
 | `X-CSRF-Token: <token>` | State-changing requests | Value of the `csrf_token` cookie |
-| `Content-Type: application/json` | Request bodies | Required for `POST` / `PATCH` with body |
+| `Content-Type: application/json` | JSON request bodies | Required for `POST` / `PATCH` with JSON body |
+| `Content-Type: application/x-www-form-urlencoded` | Revoke endpoint | Required for RFC 7009 form body |
 
 ### Rate Limits
 
 | Endpoint | Limit | Window | Key |
 |---|---|---|---|
 | `POST /api/v1/auth/token` | 10 requests | 1 minute | Per IP |
+| `POST /api/v1/auth/login` | 10 requests | 1 minute | Per IP |
 | `GET /web/auth/*/login` | 20 requests | 1 minute | Per IP |
 | Admin endpoints | 30 requests | 1 minute | Per authenticated user |

@@ -2,17 +2,17 @@ package client
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Client is the service-level representation of a client application.
@@ -76,15 +76,17 @@ type ListClientsResult struct {
 
 // Service manages client applications.
 type Service struct {
-	repo repository.Querier
+	repo     repository.Querier
+	auditSvc *audit.Service
 	// env is consulted for redirect URI validation (e.g., "production" enforces HTTPS).
 	env string
 }
 
 // New creates a new client Service.
 // env should match config.Server.Env (e.g., "production", "development").
-func New(repo repository.Querier, env string) *Service {
-	return &Service{repo: repo, env: env}
+// auditSvc may be nil; if non-nil, audit events are written for sensitive operations.
+func New(repo repository.Querier, env string, auditSvc *audit.Service) *Service {
+	return &Service{repo: repo, env: env, auditSvc: auditSvc}
 }
 
 // ListClients returns a paginated list of clients filtered by active status.
@@ -135,7 +137,7 @@ func (s *Service) GetClient(ctx context.Context, id uuid.UUID) (*Client, error) 
 }
 
 // CreateClient creates a new client application. It generates a cryptographically
-// secure random secret, hashes it with bcrypt (cost 12), and stores only the hash.
+// secure random secret, hashes it with SHA-256, and stores only the hash.
 // The plain secret is returned once in ClientWithSecret and must be conveyed to
 // the administrator immediately — it cannot be recovered afterwards.
 func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUserID uuid.UUID) (*ClientWithSecret, error) {
@@ -143,15 +145,12 @@ func (s *Service) CreateClient(ctx context.Context, dto CreateClientDTO, adminUs
 		return nil, err
 	}
 
-	plainSecret, err := generateSecret()
+	plainSecret, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash, err := hashSecret(plainSecret)
-	if err != nil {
-		return nil, fmt.Errorf("hashing client secret: %w", err)
-	}
+	hash := util.SHA256Hex(plainSecret)
 
 	isActive := dto.IsActive
 	row, err := s.repo.CreateClient(ctx, repository.CreateClientParams{
@@ -214,15 +213,12 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 		return nil, fmt.Errorf("getting client: %w", err)
 	}
 
-	plainSecret, err := generateSecret()
+	plainSecret, err := util.GenerateSecureToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("generating client secret: %w", err)
 	}
 
-	hash, err := hashSecret(plainSecret)
-	if err != nil {
-		return nil, fmt.Errorf("hashing client secret: %w", err)
-	}
+	hash := util.SHA256Hex(plainSecret)
 
 	updated, err := s.repo.RegenerateClientSecret(ctx, repository.RegenerateClientSecretParams{
 		ID:               existing.ID,
@@ -230,6 +226,13 @@ func (s *Service) RegenerateSecret(ctx context.Context, id uuid.UUID) (*ClientWi
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating client secret: %w", err)
+	}
+
+	if s.auditSvc != nil {
+		_ = s.auditSvc.LogEvent(ctx, audit.AuditEntry{
+			EventType: audit.EventClientSecretRegenerated,
+			ClientID:  &updated.ID,
+		})
 	}
 
 	c := toClient(updated)
@@ -253,22 +256,12 @@ func (s *Service) DeleteClient(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// generateSecret returns a URL-safe base64-encoded 32-byte random secret.
-func generateSecret() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("reading random bytes: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-// hashSecret hashes a plain-text secret using bcrypt with cost 12.
-func hashSecret(plain string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), 12)
-	if err != nil {
-		return "", fmt.Errorf("bcrypt: %w", err)
-	}
-	return string(hash), nil
+// ValidateClientSecret reports whether the supplied plain-text secret matches
+// the stored SHA-256 hex hash. The comparison is constant-time to prevent
+// timing side-channels.
+func ValidateClientSecret(storedHash, suppliedSecret string) bool {
+	supplied := util.SHA256Hex(suppliedSecret)
+	return subtle.ConstantTimeCompare([]byte(storedHash), []byte(supplied)) == 1
 }
 
 // toClient maps a repository Client record to the service model, stripping the secret hash.

@@ -2,16 +2,23 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/mail"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	App         AppConfig
-	Server      ServerConfig
-	Database    DatabaseConfig
-	AccessToken AccessTokenConfig
-	Security    SecurityConfig
+	App          AppConfig
+	Server       ServerConfig
+	Database     DatabaseConfig
+	AccessToken  AccessTokenConfig
+	Security     SecurityConfig
+	Bootstrap    BootstrapConfig
+	RefreshToken RefreshTokenConfig
+	Lockout      LockoutConfig
 }
 
 type AppConfig struct {
@@ -41,6 +48,30 @@ type AccessTokenConfig struct {
 	Expiry     int // in minutes
 }
 
+type RefreshTokenConfig struct {
+	ExpiryDays      int  // REFRESH_TOKEN_EXPIRY_DAYS (default: 30)
+	RotationEnabled bool // REFRESH_TOKEN_ROTATION_ENABLED (default: true)
+	MaxLifetimeDays int  // REFRESH_TOKEN_MAX_LIFETIME_DAYS (default: 90)
+}
+
+type LockoutConfig struct {
+	MaxAttempts     int // LOGIN_MAX_ATTEMPTS (default: 5)
+	WindowSeconds   int // LOGIN_ATTEMPT_WINDOW_SECONDS (default: 600)
+	DurationSeconds int // LOGIN_LOCKOUT_DURATION_SECONDS (default: 900)
+}
+
+type BootstrapConfig struct {
+	AllowDefaultAdmin         bool   // ALLOW_DEFAULT_ADMIN (default: false)
+	DefaultAdminEmail         string // DEFAULT_ADMIN_EMAIL
+	DefaultAdminPassword      string // DEFAULT_ADMIN_PASSWORD
+	AllowDefaultClient        bool   // ALLOW_DEFAULT_CLIENT (default: false)
+	DefaultClientID           string // DEFAULT_CLIENT_ID
+	DefaultClientSecret       string // DEFAULT_CLIENT_SECRET
+	DefaultClientRedirectURIs string // DEFAULT_CLIENT_REDIRECT_URIS (comma-separated)
+	DefaultClientName         string // DEFAULT_CLIENT_NAME (default: "GoAuth Client")
+	DefaultClientConfidential bool   // DEFAULT_CLIENT_CONFIDENTIAL (default: true)
+}
+
 type SecurityConfig struct {
 	// ProviderEncryptionKey is a hex-encoded 32-byte key used for AES-256-GCM
 	// encryption of OAuth provider client secrets at rest.
@@ -57,13 +88,19 @@ type SecurityConfig struct {
 	// In production an empty list means no cross-origin requests are allowed.
 	// In non-production environments an empty list enables the wildcard (*) fallback.
 	CORSAllowedOrigins []string
+
+	// MetricsAllowedCIDRs is the list of CIDRs whose source IPs are permitted
+	// to access the /metrics endpoint. Parsed from METRICS_ALLOWED_CIDRS
+	// (comma-separated, e.g. "10.0.0.0/8,172.16.0.0/12").
+	// When empty, the endpoint is open to all callers.
+	MetricsAllowedCIDRs []string
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
 			Name:    getEnv("APP_NAME", "goauth-server"),
-			Version: getEnv("VERSION", "0.0.1"),
+			Version: getEnv("VERSION", "0.3.0"),
 		},
 		Server: ServerConfig{
 			Env:      getEnv("ENV", "development"),
@@ -88,7 +125,55 @@ func Load() (*Config, error) {
 			ProviderEncryptionKey: getEnv("PROVIDER_ENCRYPTION_KEY", ""),
 			SessionSigningKey:     getEnv("SESSION_SIGNING_KEY", ""),
 			CORSAllowedOrigins:    getEnvAsStringSlice("CORS_ALLOWED_ORIGINS"),
+			MetricsAllowedCIDRs:   getEnvAsStringSlice("METRICS_ALLOWED_CIDRS"),
 		},
+		Bootstrap: BootstrapConfig{
+			AllowDefaultAdmin:         getEnvAsBool("ALLOW_DEFAULT_ADMIN", false),
+			DefaultAdminEmail:         getEnv("DEFAULT_ADMIN_EMAIL", ""),
+			DefaultAdminPassword:      getEnv("DEFAULT_ADMIN_PASSWORD", ""),
+			AllowDefaultClient:        getEnvAsBool("ALLOW_DEFAULT_CLIENT", false),
+			DefaultClientID:           getEnv("DEFAULT_CLIENT_ID", ""),
+			DefaultClientSecret:       getEnv("DEFAULT_CLIENT_SECRET", ""),
+			DefaultClientRedirectURIs: getEnv("DEFAULT_CLIENT_REDIRECT_URIS", ""),
+			DefaultClientName:         getEnv("DEFAULT_CLIENT_NAME", "GoAuth Client"),
+			DefaultClientConfidential: getEnvAsBool("DEFAULT_CLIENT_CONFIDENTIAL", true),
+		},
+	}
+
+	// Parse RefreshTokenConfig — non-numeric values are hard errors.
+	var rtErr error
+	cfg.RefreshToken.ExpiryDays, rtErr = getEnvAsIntOrError("REFRESH_TOKEN_EXPIRY_DAYS", 30)
+	if rtErr != nil {
+		return nil, rtErr
+	}
+	cfg.RefreshToken.RotationEnabled = getEnvAsBool("REFRESH_TOKEN_ROTATION_ENABLED", true)
+	cfg.RefreshToken.MaxLifetimeDays, rtErr = getEnvAsIntOrError("REFRESH_TOKEN_MAX_LIFETIME_DAYS", 90)
+	if rtErr != nil {
+		return nil, rtErr
+	}
+
+	// Parse LockoutConfig — non-numeric and zero/negative values are hard errors.
+	var lockErr error
+	cfg.Lockout.MaxAttempts, lockErr = getEnvAsIntOrError("LOGIN_MAX_ATTEMPTS", 5)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	cfg.Lockout.WindowSeconds, lockErr = getEnvAsIntOrError("LOGIN_ATTEMPT_WINDOW_SECONDS", 600)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	cfg.Lockout.DurationSeconds, lockErr = getEnvAsIntOrError("LOGIN_LOCKOUT_DURATION_SECONDS", 900)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	if cfg.Lockout.MaxAttempts <= 0 {
+		return nil, fmt.Errorf("LOGIN_MAX_ATTEMPTS must be positive, got %d", cfg.Lockout.MaxAttempts)
+	}
+	if cfg.Lockout.WindowSeconds <= 0 {
+		return nil, fmt.Errorf("LOGIN_ATTEMPT_WINDOW_SECONDS must be positive, got %d", cfg.Lockout.WindowSeconds)
+	}
+	if cfg.Lockout.DurationSeconds <= 0 {
+		return nil, fmt.Errorf("LOGIN_LOCKOUT_DURATION_SECONDS must be positive, got %d", cfg.Lockout.DurationSeconds)
 	}
 
 	if cfg.AccessToken.PrivateKey == "" {
@@ -102,6 +187,40 @@ func Load() (*Config, error) {
 	}
 	if cfg.Security.SessionSigningKey == "" {
 		return nil, fmt.Errorf("SESSION_SIGNING_KEY is required")
+	}
+
+	for _, cidr := range cfg.Security.MetricsAllowedCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return nil, fmt.Errorf("METRICS_ALLOWED_CIDRS contains an invalid CIDR %q: %w", cidr, err)
+		}
+	}
+
+	// Validate BootstrapConfig fields that carry user-supplied values.
+	if cfg.Bootstrap.DefaultAdminEmail != "" {
+		if _, err := mail.ParseAddress(cfg.Bootstrap.DefaultAdminEmail); err != nil {
+			return nil, fmt.Errorf("DEFAULT_ADMIN_EMAIL is not a valid email address: %w", err)
+		}
+	}
+
+	// Password policy validation (internal/util/password) is deferred to T7
+	// when that package is implemented. A TODO is left here so the call site is
+	// already wired correctly once the package exists.
+	// TODO(T7): if cfg.Bootstrap.DefaultAdminPassword != "" && cfg.Bootstrap.DefaultAdminEmail != "" {
+	//     if err := password.Validate(cfg.Bootstrap.DefaultAdminPassword, cfg.Bootstrap.DefaultAdminEmail); err != nil {
+	//         return nil, fmt.Errorf("DEFAULT_ADMIN_PASSWORD does not meet policy: %w", err)
+	//     }
+	// }
+
+	if cfg.Bootstrap.DefaultClientRedirectURIs != "" {
+		for _, raw := range strings.Split(cfg.Bootstrap.DefaultClientRedirectURIs, ",") {
+			uri := strings.TrimSpace(raw)
+			if uri == "" {
+				continue
+			}
+			if _, err := url.ParseRequestURI(uri); err != nil {
+				return nil, fmt.Errorf("DEFAULT_CLIENT_REDIRECT_URIS contains an invalid URI %q: %w", uri, err)
+			}
+		}
 	}
 
 	return cfg, nil
@@ -140,6 +259,33 @@ func getEnvAsInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return value
+}
+
+// getEnvAsIntOrError reads an integer environment variable. It returns
+// defaultValue when the variable is unset or empty, and a descriptive error
+// when the value is present but cannot be parsed as an integer.
+func getEnvAsIntOrError(key string, defaultValue int) (int, error) {
+	str := os.Getenv(key)
+	if str == "" {
+		return defaultValue, nil
+	}
+	v, err := strconv.Atoi(strings.TrimSpace(str))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer, got %q", key, str)
+	}
+	return v, nil
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return defaultValue
+	}
 }
 
 // getEnvAsStringSlice splits a comma-separated environment variable into a

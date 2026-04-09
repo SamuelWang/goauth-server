@@ -25,11 +25,15 @@
 ## Features
 
 - **OAuth 2.0 Authorization Code Grant** — Full end-to-end flow: provider login, callback handling, code-for-token exchange, and token revocation.
+- **Refresh Tokens with Rotation** — Rotate-on-use refresh tokens with replay detection and RFC 7009 revocation support.
 - **Client-scoped OAuth providers** — Each client application can configure its own set of OAuth providers. Provider credentials are isolated per client and encrypted at rest with AES-256-GCM.
-- **Multi-provider support** — Configure multiple providers per client (e.g., Google + GitHub + Microsoft Entra ID). The same provider type can be configured differently across clients.
+- **Email & Password Login** — Native login endpoint with Argon2id password hashing and strict complexity policies.
+- **Account Lockout & Security Gating** — Sliding-window failed-attempt tracking with configurable thresholds and force-password-change challenge flows.
+- **Automated Bootstrap** — Environment-driven first-run creation of administrator accounts and OAuth clients for CI/CD and rapid deployment.
+- **Structured Audit Logging** — Append-only security audit log tracking 15+ event types (logins, lockouts, token lifecycle, admin actions).
 - **JWT access tokens** — ECDSA ES256-signed JWTs with configurable expiry. Tokens are validated and revocation-checked on every request.
-- **Admin management API** — Full CRUD for clients, client-scoped providers, users, and sessions (authorization codes + access tokens).
-- **Security hardening** — Rate limiting (per IP and per user), CORS, CSRF double-submit cookie protection, security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy), and structured security event logging.
+- **Admin management API** — Full CRUD for clients, client-scoped providers, users, sessions, and audit logs.
+- **Security hardening** — Rate limiting (per IP and per user), CORS, CSRF double-submit cookie protection, and security headers (CSP, HSTS, X-Frame-Options).
 - **Prometheus metrics + Grafana dashboards** — Request rates, error rates, latency percentiles, token issuance, and security event counters.
 - **Docker & Kubernetes ready** — Multi-stage Dockerfile, Docker Compose stack with auto-migration, and full Kubernetes manifests.
 - **CI pipeline** — GitHub Actions with lint, unit tests, integration tests, coverage gate (≥ 80%), and binary build.
@@ -83,22 +87,29 @@ cd goauth-server
 cp .env.example .env
 ```
 
-**2. Generate required secret keys**
+**2. Generate required secret keys and bootstrap credentials**
+
+Configure the required cryptographic keys and (optional) initial admin/client credentials in your `.env` file:
 
 ```bash
-# ES256 key pair for JWT signing
+# --- 1. JWT keys (ES256 key pair for signing access tokens) ---
 chmod +x scripts/credentials/generate_access_token_keys.sh
 ./scripts/credentials/generate_access_token_keys.sh
 # Copy the printed keys into .env (ACCESS_TOKEN_PRIVATE_KEY / ACCESS_TOKEN_PUBLIC_KEY)
 
+# --- 2. Security keys (32-byte hex strings) ---
 # AES-256 encryption key for provider secrets at rest
 openssl rand -hex 32   # → paste as PROVIDER_ENCRYPTION_KEY in .env
-
 # HMAC key for OAuth session cookies
 openssl rand -hex 32   # → paste as SESSION_SIGNING_KEY in .env
 
-# Database password
+# --- 3. Database password ---
 # → set as DB_PASSWORD in .env
+
+# --- 4. Bootstrap Configuration (Optional but recommended) ---
+# Set ALLOW_DEFAULT_ADMIN=true and ALLOW_DEFAULT_CLIENT=true, then fill in 
+# your desired email, password, and client ID/secret. This allows you to 
+# log in and start using the API immediately.
 ```
 
 **3. Start the stack**
@@ -107,7 +118,7 @@ openssl rand -hex 32   # → paste as SESSION_SIGNING_KEY in .env
 docker compose up --build
 ```
 
-The `migrate` service automatically applies all pending database migrations before the API server starts.
+The `migrate` service automatically applies all pending database migrations before the API server starts. Once running, the server will automatically seed the default admin and client if configured.
 
 **Service endpoints once running:**
 
@@ -151,13 +162,9 @@ cp .env.example .env
 # Edit .env — see the Configuration section below
 ```
 
-**4. Generate JWT keys**
+**4. Generate required secret keys**
 
-```bash
-chmod +x scripts/credentials/generate_access_token_keys.sh
-./scripts/credentials/generate_access_token_keys.sh
-# Copy the PRIVATE and PUBLIC key blocks into .env
-```
+Configure the required cryptographic keys and (optional) bootstrap credentials in your `.env` file. Follow step 2 of the [Quick Start (Docker)](#quick-start-docker) section for the specific commands to generate JWT keys, the `PROVIDER_ENCRYPTION_KEY`, and the `SESSION_SIGNING_KEY`.
 
 **5. Run database migrations**
 
@@ -172,7 +179,7 @@ chmod +x db/scripts/run_migrations.sh
 go run ./cmd/auth-server
 ```
 
-The server starts on `http://localhost:8080` by default.
+The server starts on `http://localhost:8080` by default. If you configured the [Bootstrap Configuration](#configuration), the default administrator account and OAuth client will be created automatically on the first run.
 
 ## Configuration
 
@@ -196,6 +203,10 @@ All configuration is read from environment variables (or a `.env` file in the pr
 | `PROVIDER_ENCRYPTION_KEY` | Yes | — | 64 hex chars (32 bytes) — AES-256-GCM key for provider secrets |
 | `SESSION_SIGNING_KEY` | Yes | — | 64 hex chars (32 bytes) — HMAC-SHA256 key for OAuth session cookies |
 | `CORS_ALLOWED_ORIGINS` | No | `""` | Comma-separated allowed CORS origins (empty = wildcard in dev, block all in prod) |
+| `ALLOW_DEFAULT_ADMIN` | No | `false` | Enable automated first-run admin creation |
+| `ALLOW_DEFAULT_CLIENT` | No | `false` | Enable automated first-run OAuth client creation |
+| `REFRESH_TOKEN_EXPIRY_DAYS` | No | `30` | Refresh token lifetime in days |
+| `LOGIN_MAX_ATTEMPTS` | No | `5` | Failed attempts before account lockout |
 | `GRAFANA_ADMIN_USER` | No | `admin` | Grafana admin username (Docker Compose only) |
 | `GRAFANA_ADMIN_PASSWORD` | No | — | Grafana admin password (Docker Compose only) |
 
@@ -214,7 +225,10 @@ Interactive documentation is available at `/api/docs/index.html` when the server
 | `GET` | `/api/v1/clients/:client_id/auth/providers` | List enabled OAuth providers for a client |
 | `GET` | `/web/auth/:client_id/:provider/login` | Initiate OAuth login flow |
 | `GET` | `/web/auth/:client_id/:provider/callback` | OAuth provider callback |
-| `POST` | `/api/v1/auth/token` | Exchange authorization code for access token |
+| `POST` | `/api/v1/auth/login` | Email & password login |
+| `POST` | `/api/v1/auth/change-password` | Complete force-password-change challenge |
+| `POST` | `/api/v1/auth/token` | Exchange authorization code or refresh token |
+| `POST` | `/api/v1/auth/revoke` | Revoke an access or refresh token (RFC 7009) |
 
 ### Authenticated endpoints (Bearer token required)
 
@@ -240,6 +254,7 @@ Interactive documentation is available at `/api/docs/index.html` when the server
 | `DELETE` | `/api/v1/clients/:client_id/providers/:id` | Delete provider |
 | `GET` | `/api/v1/users` | List users |
 | `PATCH` | `/api/v1/users/:id` | Update user status |
+| `DELETE` | `/api/v1/users/:id/lockout` | Unlock a user account |
 | `GET` | `/api/v1/sessions/codes` | List authorization codes |
 | `DELETE` | `/api/v1/sessions/codes/:id` | Revoke authorization code |
 | `GET` | `/api/v1/sessions/tokens` | List access tokens |
@@ -266,6 +281,7 @@ All state-changing admin requests require both an `Authorization: Bearer <token>
 | Query codegen | [sqlc](https://sqlc.dev/) |
 | Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) |
 | JWT | [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) (ES256) |
+| Password hashing | Argon2id (golang.org/x/crypto/argon2) |
 | Metrics | [Prometheus client_golang](https://github.com/prometheus/client_golang) |
 | API docs | [swaggo/swag](https://github.com/swaggo/swag) |
 | Linter | [golangci-lint](https://golangci-lint.run/) |
@@ -296,6 +312,7 @@ goauth-server/
 │   ├── models/               # Shared domain models
 │   ├── repository/           # sqlc-generated data access layer
 │   ├── service/              # Business logic
+│   │   ├── audit/            # Business-level structured audit logging (DB persisted)
 │   │   ├── auth/             # OAuth flow, token issuance, and revocation
 │   │   ├── client/           # Client application management
 │   │   ├── provider/         # OAuth provider management (with secret encryption)
@@ -314,6 +331,32 @@ goauth-server/
 │   └── deploy/               # Docker and Kubernetes deployment scripts
 └── docker-compose.yml
 ```
+
+### Coding Style
+
+- **Standard Go Formatting:** Use `gofmt` or `goimports` to maintain consistent formatting.
+- **Linter Compliance:** Ensure all code passes `golangci-lint run`. Configuration is provided in `.golangci.yml`.
+- **Error Handling:** Follow the Go 1.13+ error wrapping pattern. Use `fmt.Errorf("...: %w", err)` to wrap errors for better context.
+- **Dependency Injection:** Use interfaces and constructor functions (`New`) to inject dependencies, facilitating mock-based testing.
+- **Context Management:** Pass `context.Context` as the first argument to methods performing I/O or long-running operations.
+- **Testing Standards:**
+  - Use [testify](https://github.com/stretchr/testify) for assertions.
+  - Use [testcontainers-go](https://golang.testcontainers.org/) for integration tests involving PostgreSQL.
+  - Maintain at least 80% code coverage (enforced by CI).
+- **Documentation:** Use standard Go doc comments for exported symbols. Keep Swagger/OpenAPI annotations updated in handler functions and `cmd/auth-server/docs.go`.
+- **Security First:** Never log sensitive information (tokens, secrets). Use `internal/util/security_log.go` for real-time security event alerting and `internal/service/audit/` for persistent business-level audit trails.
+
+### Utility Packages
+
+Before implementing common functionality, please review the shared utilities in `internal/util/` to avoid duplication:
+
+| Package | Purpose | Key Utilities |
+|---------|---------|---------------|
+| `util` | General helpers | `SHA256Hex`, `GenerateSecureToken`, `StrPtr` |
+| `util` | Security Audit | Structured logging for security events (Auth failures, CSRF, etc.) via `Log*` functions |
+| `util/password` | Password Policy | `Validate` function for length, complexity, and common-password denylist |
+
+**Mandatory:** Review these utilities before implementing new helper functions or security logging logic.
 
 ### Database Migrations
 
@@ -476,11 +519,12 @@ Alert rules (in `monitoring/prometheus/alerts.yml`) fire on: server down, high 5
 |----------|-------------|
 | [Administrator Guide](docs/AdministratorGuide.md) | Setup, key generation, client and provider management, troubleshooting |
 | [Client Integration Guide](docs/ClientIntegrationGuide.md) | OAuth flow walkthrough with TypeScript, Python, and Go examples |
+| [Frontend Integration Guide](docs/FrontendIntegrationGuide.md) | Guide for SPA and mobile developers: login, tokens, and error handling |
 | [Database Documentation](docs/DatabaseDocumentation.md) | Schema, indexes, foreign keys, and migration order |
 | [Service Layer Documentation](docs/ServiceLayerDocumentation.md) | Business logic layer architecture and service contracts |
 | [Repository Documentation](docs/RepositoryDocumentation.md) | Data access layer and sqlc query reference |
 | [API Docs (Swagger UI)](http://localhost:8080/api/docs/index.html) | Interactive OpenAPI documentation (requires running server) |
-| [System Design v0.2.0](docs/v0.2.0/SystemDesign.md) | Architecture decisions and component design |
+| [System Design v0.3.0](docs-planning/v0.3.0/SystemDesign.md) | Architecture decisions and component design |
 
 ## Contributing
 

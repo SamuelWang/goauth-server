@@ -1,5 +1,170 @@
 # Release Notes
 
+## v0.3.0 — April 9, 2026
+
+### Overview
+
+v0.3.0 builds on the OAuth 2.0 Authorization Code Grant foundation from v0.2.0 and adds direct email/password authentication, account lockout, force-password-change enforcement, a full refresh token system, audit logging, and environment-driven first-run bootstrap for operators. All client secrets are migrated from bcrypt to SHA-256 in this release.
+
+---
+
+### Breaking Changes
+
+- **Client secret hashing algorithm changed (bcrypt → SHA-256).** Client secrets are now stored as `hex(sha256(secret))` instead of bcrypt hashes. Existing client secrets hashed with bcrypt are **no longer valid** after upgrading to v0.3.0. After running the database migrations, all client application secrets must be regenerated using the `POST /api/v1/admin/clients/{id}/secret` endpoint. The new plaintext secret returned by that endpoint must be distributed to the corresponding client application before it can authenticate again.
+- **Database schema expanded.** Four new migrations extend the schema (see Database section below). Run all migrations in order before upgrading.
+
+---
+
+### New Features
+
+#### Default Admin & Client Bootstrap
+- At startup, the server can automatically create a first administrator account and a first OAuth client when none exist.
+- Credentials are supplied via environment variables (`DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `DEFAULT_CLIENT_ID`, `DEFAULT_CLIENT_SECRET`, `DEFAULT_CLIENT_REDIRECT_URIS`, and optional metadata variables).
+- Bootstrap is **disabled by default in production** and requires explicit opt-in via `ALLOW_DEFAULT_ADMIN=true` / `ALLOW_DEFAULT_CLIENT=true`. A prominent warning is emitted in logs whenever a default credential is created.
+- Bootstrap-created admin accounts are automatically flagged with `force_password_change=true` and an audit entry is written (without password material).
+- Startup aborts with a descriptive error if bootstrap environment variables fail validation (invalid email, weak password, or invalid redirect URIs).
+
+#### Email & Password Login
+- New `POST /api/v1/auth/login` endpoint accepts `{"email": "...", "password": "..."}` and issues a JWT access token (and refresh token when applicable).
+- Passwords are verified against an Argon2id hash.
+- **Password complexity policy** enforced at all password-setting flows: minimum 12 characters; at least one uppercase letter, lowercase letter, digit, and special character; must not appear in the OWASP/NIST top-1000 deny-list; must not contain the user's email address as a substring.
+- If `force_password_change=true` on the account, the endpoint returns a short-lived challenge token (`{"challenge_token": "...", "require": "password_change"}`) instead of an access token.
+- Rate limiting applied at `POST /api/v1/auth/login`.
+
+#### Account Lockout
+- After **5 consecutive failed login attempts within a 10-minute sliding window**, the account is locked for **15 minutes**.
+- Locked accounts receive `429 Too Many Requests` with a `Retry-After` header indicating when the lockout expires.
+- Lockout state (`locked_until`, `failed_login_attempts`, `last_failed_login_at`) is persisted in the database and survives restarts and horizontal scaling.
+- `account_locked` and `account_unlocked` audit entries are written on state transitions.
+- Configurable via `LOGIN_MAX_ATTEMPTS` (default: 5), `LOGIN_ATTEMPT_WINDOW_SECONDS` (default: 600), and `LOGIN_LOCKOUT_DURATION_SECONDS` (default: 900).
+- Administrators can manually unlock an account via the new `DELETE /api/v1/admin/users/:id/lockout` endpoint.
+
+#### Force Password Change
+- New `POST /api/v1/auth/change-password` endpoint accepts a `challenge_token` (issued by the login endpoint) and a compliant `new_password`.
+- Challenge tokens are HS256-signed JWTs with a `typ=password_change` claim and expire in 15 minutes. They are single-use: if `force_password_change` is already `false` when the endpoint is called, a `409 Conflict` is returned.
+- On success: password hash is updated, `force_password_change` is cleared, all existing refresh tokens for the user are revoked, both `user_password_changed` and `force_password_change_satisfied` audit entries are written, and a new access token is returned.
+
+#### Refresh Token System
+- Refresh tokens are issued during the Authorization Code Grant when the client has `allow_refresh_tokens=true` and the granted scopes include `offline_access`.
+- Refresh tokens use a **token family model**: each token stores a `token_family_id` linking it to its rotation lineage.
+- **Rotation on use**: `POST /api/v1/auth/token` with `grant_type=refresh_token` invalidates the presented token and returns a new access token + refresh token. The old token hash is marked used in the database.
+- **Replay detection**: if a previously rotated (revoked) refresh token is presented, the entire token family is immediately revoked, an `replay_detected` audit entry is written, and `400 invalid_grant` is returned.
+- Configurable expiry via `REFRESH_TOKEN_EXPIRY_DAYS` (default: 30) and `REFRESH_TOKEN_MAX_LIFETIME_DAYS` (default: 90). Rotation can be disabled with `REFRESH_TOKEN_ROTATION_ENABLED=false`.
+- Refresh tokens are identified in the database by a SHA-256 hash of the raw token value; the plaintext value is never stored.
+- New `is_confidential` and `allow_refresh_tokens` columns on the `clients` table gate refresh token issuance.
+
+#### RFC 7009 Token Revocation
+- New `POST /api/v1/auth/revoke` endpoint accepts a token and an optional `token_type_hint` (form-encoded body).
+- Caller authenticates via HTTP Basic credentials (client ID + secret) or a Bearer access token.
+- Revoking a refresh token also revokes its linked access token. Per RFC 7009, unknown tokens return `200 OK`.
+- Refresh tokens are revoked automatically on user logout, password change, and admin-initiated session revocation.
+
+#### Audit Log
+- New append-only `audit_log` table records security-relevant events. No secrets or token values are ever written.
+- New `internal/service/audit` package with `LogEvent(ctx, AuditEntry)`. Audit failures are non-blocking — they never interrupt the primary flow.
+- 15 structured event types: `default_admin_created`, `default_client_created`, `user_password_changed`, `force_password_change_satisfied`, `refresh_token_issued`, `refresh_token_rotated`, `refresh_token_revoked`, `refresh_token_family_revoked`, `replay_detected`, `access_token_revoked`, `admin_session_revoked`, `login_failed`, `account_locked`, `account_unlocked`, `client_secret_regenerated`.
+- New admin endpoint `GET /api/v1/audit-log` (paginated, filterable by `event_type`, `user_id`, `client_id`).
+- New session management endpoints for refresh tokens: `GET /api/v1/sessions/refresh-tokens` and `DELETE /api/v1/sessions/refresh-tokens/:id`.
+
+---
+
+### Database
+
+Four new migrations (all dated 2026-03-26):
+
+| Migration | Description |
+|---|---|
+| `add_lockout_force_password_to_users` | Adds `password_hash`, `force_password_change`, `failed_login_attempts`, `last_failed_login_at`, `locked_until` columns to `users`; adds `idx_users_locked_until` index |
+| `add_confidential_refresh_tokens_to_clients` | Adds `is_confidential` (default `true`) and `allow_refresh_tokens` (default `false`) columns to `clients` |
+| `create_refresh_tokens_table` | Token family model with rotation/replay support; FKs to `clients`, `users`, `access_tokens` (self-referential for `previous_token_id`); 6 indexes |
+| `create_audit_log_table` | Append-only log; no `updated_at` trigger; 4 indexes on `event_type`, `user_id`, `client_id`, `created_at` |
+
+Migration order: apply after all existing v0.2.0 migrations.
+
+---
+
+### Configuration
+
+15 new environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ALLOW_DEFAULT_ADMIN` | `false` | Enable default admin bootstrap in production |
+| `DEFAULT_ADMIN_EMAIL` | — | Email for the bootstrap admin account |
+| `DEFAULT_ADMIN_PASSWORD` | — | Password for the bootstrap admin account (hashed before storage) |
+| `ALLOW_DEFAULT_CLIENT` | `false` | Enable default client bootstrap in production |
+| `DEFAULT_CLIENT_ID` | — | Client ID for the bootstrap client |
+| `DEFAULT_CLIENT_SECRET` | — | Client secret for the bootstrap client (SHA-256 hashed before storage) |
+| `DEFAULT_CLIENT_REDIRECT_URIS` | — | Comma-separated redirect URIs for the bootstrap client |
+| `DEFAULT_CLIENT_NAME` | `GoAuth Client` | Display name for the bootstrap client |
+| `DEFAULT_CLIENT_CONFIDENTIAL` | `true` | Whether the bootstrap client is a confidential client |
+| `LOGIN_MAX_ATTEMPTS` | `5` | Failed attempts before account lockout |
+| `LOGIN_ATTEMPT_WINDOW_SECONDS` | `600` | Sliding window for failed attempt counting (seconds) |
+| `LOGIN_LOCKOUT_DURATION_SECONDS` | `900` | Account lockout duration (seconds) |
+| `REFRESH_TOKEN_EXPIRY_DAYS` | `30` | Refresh token lifetime in days |
+| `REFRESH_TOKEN_ROTATION_ENABLED` | `true` | Enable rotate-on-use for refresh tokens |
+| `REFRESH_TOKEN_MAX_LIFETIME_DAYS` | `90` | Absolute maximum lifetime for any token in a family |
+
+---
+
+### API Changes
+
+New public endpoints:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/auth/login` | Authenticate with email and password |
+| `POST` | `/api/v1/auth/change-password` | Exchange a challenge token for a compliant new password and access token |
+| `POST` | `/api/v1/auth/revoke` | RFC 7009 token revocation (refresh token or access token) |
+
+Updated public endpoint:
+
+| Method | Path | Change |
+|---|---|---|
+| `POST` | `/api/v1/auth/token` | Now accepts `grant_type=refresh_token` in addition to `grant_type=authorization_code` |
+
+New admin endpoints:
+
+| Method | Path | Description |
+|---|---|---|
+| `DELETE` | `/api/v1/admin/users/:id/lockout` | Manually unlock a locked user account |
+| `GET` | `/api/v1/sessions/refresh-tokens` | List refresh tokens (paginated) |
+| `DELETE` | `/api/v1/sessions/refresh-tokens/:id` | Revoke a refresh token by record ID |
+| `GET` | `/api/v1/audit-log` | Query the audit log (paginated, filterable) |
+
+---
+
+### Testing
+
+| Layer | Coverage |
+|---|---|
+| Repository integration (`refresh_tokens`, `audit_log`, updated `users`/`clients` queries) | Testcontainers-based |
+| Auth service — login & lockout state machine | 5 cases |
+| Auth service — challenge token lifecycle | 4 cases |
+| Auth service — refresh token rotation & replay | 5 cases |
+| Audit service | 4 cases |
+| Bootstrap | 9 cases |
+| Password validator | 8 cases (100% coverage) |
+| API handlers — login | 5 cases |
+| API handlers — change-password | 4 cases |
+| API handlers — token (refresh grant) | 4 cases |
+| API handlers — revoke | 4 cases |
+| API handlers — admin lockout | 3 cases |
+
+All tests pass. Project-wide coverage exceeds the 80% gate enforced by CI.
+
+---
+
+### Documentation
+
+- **Administrator Guide** (`docs/AdministratorGuide.md`) — Updated to v0.3.0: all 15 new environment variables documented; bootstrap configuration and production guard explained; admin unlock endpoint with examples; refresh token session management; audit log event type reference; SHA-256 migration notice; updated production checklist.
+- **Client Integration Guide** (`docs/ClientIntegrationGuide.md`) — Updated to v0.3.0: email/password login flow with lockout and force-password-change handling; refresh token grant and rotation; RFC 7009 revocation; updated code examples (TypeScript and Python).
+- **Frontend Integration Guide** (`docs/FrontendIntegrationGuide.md`) — New document targeting web and mobile developers: decision diagram for auth flows; token storage guidance; silent refresh pattern; complete TypeScript code examples for login, password change, token refresh, logout, and an `AuthClient` class.
+- **Database Documentation** (`docs/DatabaseDocumentation.md`) — Updated to v0.3.0: ERD extended with `refresh_tokens` and `audit_log`; all new columns, indexes, and foreign keys documented; four new migrations in migration history.
+- **Service Layer Documentation** (`docs/ServiceLayerDocumentation.md`) — Updated to v0.3.0: `VerifyCredentials`, challenge token helpers, `RotateRefreshToken`, and `ExchangeAuthorizationCode` (refresh token path) documented; new `audit.Service` package with all 15 event type constants; SHA-256 constant-time comparison documented for `ValidateClientSecret`.
+
+---
+
 ## v0.2.0 — March 12, 2026
 
 ### Overview

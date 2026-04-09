@@ -1,7 +1,7 @@
 // Package main is the entry point for the Goauth Server.
 //
 // @title           Goauth Server API
-// @version         0.2.0
+// @version         0.3.0
 // @description     OAuth 2.0 Authorization Code Grant server with client-scoped provider management.
 // @description
 // @description     ## OAuth 2.0 Authorization Code Flow

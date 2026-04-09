@@ -21,10 +21,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,31 +33,27 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/middleware"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-func hashTokenForPentest(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
-}
-
 // notRevokedTokenRow builds a non-revoked AccessToken for the given raw token and user.
 func notRevokedTokenRow(rawToken string, userID uuid.UUID) repository.AccessToken {
 	notRevoked := false
+	clientID := uuid.New()
 	return repository.AccessToken{
 		ID:        uuid.New(),
-		TokenHash: hashTokenForPentest(rawToken),
-		ClientID:  uuid.New(),
+		TokenHash: util.SHA256Hex(rawToken),
+		ClientID:  &clientID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -227,7 +221,7 @@ func TestSecurity_RevokedTokenRejected(t *testing.T) {
 
 	// Simulate a revoked token stored in the DB.
 	revokedRow := revokedTokenRow(token)
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(revokedRow, nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(revokedRow, nil)
 
 	w := env.doRequestWithRawToken(http.MethodGet, "/api/v1/auth/me", nil, token)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -238,16 +232,21 @@ func TestSecurity_RevokedTokenRejected(t *testing.T) {
 }
 
 // TestSecurity_TokenNotFoundInDB verifies that a well-formed JWT whose hash is not
-// in the database (e.g. never issued, or already cleaned up) is rejected.
+// in the database is accepted — tokens not in DB are treated as not-revoked
+// (direct-login tokens issued in v0.3.0+ are not persisted to access_tokens).
 func TestSecurity_TokenNotFoundInDB(t *testing.T) {
 	env := newTestEnv(t)
 	userID := uuid.New()
 	token := env.generateToken(t, userID.String(), "user@example.com")
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashToken(token)).Return(repository.AccessToken{}, pgx.ErrNoRows)
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(repository.AccessToken{}, pgx.ErrNoRows)
+	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(repository.User{
+		ID:    userID,
+		Email: "user@example.com",
+	}, nil)
 
 	w := env.doRequestWithRawToken(http.MethodGet, "/api/v1/auth/me", nil, token)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // TestSecurity_MalformedBearerToken verifies that malformed Authorization headers
@@ -484,7 +483,7 @@ func TestSecurity_CSRF_MissingHeader(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -510,7 +509,7 @@ func TestSecurity_CSRF_WrongHeaderValue(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -535,7 +534,7 @@ func TestSecurity_CSRF_MissingCookie(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -561,7 +560,7 @@ func TestSecurity_CSRF_EmptyHeaderValue(t *testing.T) {
 	isActive := true
 	adminUser := repository.User{ID: userID, IsAdmin: &isAdmin, IsActive: isActive, Email: "user@example.com", UpdatedAt: time.Now(), CreatedAt: time.Now()}
 
-	env.mockQ.On("GetAccessToken", mock.Anything, hashTokenForPentest(token)).Return(tokenRow, nil).Maybe()
+	env.mockQ.On("GetAccessToken", mock.Anything, util.SHA256Hex(token)).Return(tokenRow, nil).Maybe()
 	env.mockQ.On("GetUserByID", mock.Anything, userID).Return(adminUser, nil).Maybe()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/clients", bytes.NewBufferString(`{"name":"evil"}`))
@@ -794,7 +793,7 @@ func TestSecurity_TokenHashExcludedFromSessionResponse(t *testing.T) {
 	tokenRow := repository.AccessToken{
 		ID:        uuid.New(),
 		TokenHash: "this-should-never-appear-in-response",
-		ClientID:  uuid.New(),
+		ClientID:  func() *uuid.UUID { id := uuid.New(); return &id }(),
 		UserID:    uuid.New(),
 		ExpiresAt: time.Now().Add(time.Hour),
 		IsRevoked: &notRevoked,
@@ -820,7 +819,7 @@ func TestSecurity_ClientSecretHashNotExposedInList(t *testing.T) {
 	clientID := uuid.New()
 	cl := buildActiveClient(clientID, "my-client", adminID)
 	// Store a recognizable hash value to detect leakage.
-	cl.ClientSecretHash = "BCRYPT-HASH-MUST-NOT-APPEAR-IN-RESPONSE"
+	cl.ClientSecretHash = "SHA256-HASH-MUST-NOT-APPEAR-IN-RESPONSE"
 	isActive := true
 
 	env.mockQ.On("ListClients", mock.Anything, repository.ListClientsParams{
@@ -834,7 +833,7 @@ func TestSecurity_ClientSecretHashNotExposedInList(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	rawBody := w.Body.String()
-	assert.NotContains(t, rawBody, "BCRYPT-HASH-MUST-NOT-APPEAR-IN-RESPONSE")
+	assert.NotContains(t, rawBody, "SHA256-HASH-MUST-NOT-APPEAR-IN-RESPONSE")
 	assert.NotContains(t, rawBody, "client_secret_hash")
 }
 
@@ -1053,6 +1052,7 @@ func TestSecurity_UnauthenticatedCannotAccessAdminRoutes(t *testing.T) {
 
 // TestSecurity_UnsupportedGrantType verifies that unsupported OAuth grant types
 // are rejected (prevents implicit/password/client_credentials grant abuse).
+// Note: "refresh_token" is supported in v0.3.0 and is intentionally excluded.
 func TestSecurity_UnsupportedGrantType(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -1060,7 +1060,6 @@ func TestSecurity_UnsupportedGrantType(t *testing.T) {
 		"implicit",
 		"password",
 		"client_credentials",
-		"refresh_token",
 		"urn:ietf:params:oauth:grant-type:device_code",
 	}
 
@@ -1290,24 +1289,23 @@ func TestSecurity_MethodNotAllowed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 17. Bcrypt Timing Attack Mitigation (Inactive Client)
+// 17. Timing Attack Mitigation (Inactive Client)
 // ---------------------------------------------------------------------------
 
 // TestSecurity_InactiveClientRejected verifies that an inactive client is rejected
-// before bcrypt comparison to prevent timing differences from leaking client existence.
+// before SHA-256 comparison to prevent timing differences from leaking client existence.
 func TestSecurity_InactiveClientRejected(t *testing.T) {
 	env := newTestEnv(t)
 
 	redirectURI := "https://app.example.com/callback"
 	plainSecret := "my-secret"
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainSecret), bcrypt.MinCost)
-	require.NoError(t, err)
+	hash := util.SHA256Hex(plainSecret)
 
 	isActive := false
 	inactiveClient := repository.Client{
 		ID:               uuid.New(),
 		Name:             "inactive-client",
-		ClientSecretHash: string(hash),
+		ClientSecretHash: hash,
 		RedirectUris:     []string{redirectURI},
 		GrantTypes:       []string{"authorization_code"},
 		IsActive:         &isActive,

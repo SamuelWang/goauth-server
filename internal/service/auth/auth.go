@@ -7,6 +7,7 @@ import (
 
 	"github.com/SamuelWang/goauth-server/internal/config"
 	"github.com/SamuelWang/goauth-server/internal/repository"
+	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/service/provider"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ type Service struct {
 	publicKey   *ecdsa.PublicKey
 	repo        repository.Querier
 	providerSvc providerServicer
+	auditSvc    *audit.Service
 }
 
 type Claims struct {
@@ -32,7 +34,9 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func New(repo repository.Querier, cfg *config.Config, providerSvc providerServicer) (*Service, error) {
+// New creates an auth Service. auditSvc may be nil; when provided, sensitive
+// events (failed logins, lockouts) are written to the audit log.
+func New(repo repository.Querier, cfg *config.Config, providerSvc providerServicer, auditSvc *audit.Service) (*Service, error) {
 	// Parse private key
 	privateKey, err := parsePrivateKey(cfg.AccessToken.PrivateKey)
 	if err != nil {
@@ -51,6 +55,7 @@ func New(repo repository.Querier, cfg *config.Config, providerSvc providerServic
 		publicKey:   publicKey,
 		repo:        repo,
 		providerSvc: providerSvc,
+		auditSvc:    auditSvc,
 	}
 
 	return svc, nil

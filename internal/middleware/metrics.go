@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -36,5 +38,39 @@ func MetricsMiddleware() gin.HandlerFunc {
 
 		metrics.HTTPRequestsTotal.WithLabelValues(method, route, status).Inc()
 		metrics.HTTPRequestDuration.WithLabelValues(method, route).Observe(elapsed)
+	}
+}
+
+// MetricsIPAllowlistMiddleware restricts access to the /metrics endpoint to
+// the given CIDRs.  CIDRs are parsed once at registration time; any invalid
+// entry causes a panic so misconfiguration is caught at startup.
+// When allowedCIDRs is empty all callers are permitted (open/default behaviour).
+func MetricsIPAllowlistMiddleware(allowedCIDRs []string) gin.HandlerFunc {
+	nets := make([]*net.IPNet, 0, len(allowedCIDRs))
+	for _, cidr := range allowedCIDRs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic("MetricsIPAllowlistMiddleware: invalid CIDR " + cidr + ": " + err.Error())
+		}
+		nets = append(nets, network)
+	}
+
+	return func(c *gin.Context) {
+		if len(nets) == 0 {
+			c.Next()
+			return
+		}
+
+		ip := net.ParseIP(c.ClientIP())
+		if ip != nil {
+			for _, network := range nets {
+				if network.Contains(ip) {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.AbortWithStatus(http.StatusForbidden)
 	}
 }
