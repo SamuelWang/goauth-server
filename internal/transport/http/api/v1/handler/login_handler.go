@@ -92,6 +92,12 @@ func (h *ApiV1Handler) Login(c *gin.Context) {
 		return
 	}
 
+	if err := h.authService.RevokeAllUserAccessTokens(c.Request.Context(), result.User.ID); err != nil {
+		log.Printf("Login: revoking existing tokens: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+
 	if err := h.authService.StoreDirectLoginToken(c.Request.Context(), tokenStr, result.User.ID); err != nil {
 		log.Printf("Login: storing access token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})

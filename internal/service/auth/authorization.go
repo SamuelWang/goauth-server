@@ -337,6 +337,16 @@ func (s *Service) RevokeRawToken(ctx context.Context, rawToken string) error {
 	return s.RevokeToken(ctx, util.SHA256Hex(rawToken))
 }
 
+// RevokeAllUserAccessTokens revokes every active access token belonging to
+// userID. Call this before issuing a new token on login to enforce single-session
+// semantics and to invalidate stale sessions.
+func (s *Service) RevokeAllUserAccessTokens(ctx context.Context, userID uuid.UUID) error {
+	if err := s.repo.RevokeAccessTokensByUser(ctx, userID); err != nil {
+		return fmt.Errorf("revoking user access tokens: %w", err)
+	}
+	return nil
+}
+
 // RevokeUserRefreshTokens revokes all active refresh tokens for the given user.
 // reason is recorded on each token row for auditing (e.g. "logout", "password_change").
 // Errors are returned to callers so they may log or ignore them appropriately.
