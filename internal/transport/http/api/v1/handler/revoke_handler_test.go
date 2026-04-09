@@ -59,6 +59,7 @@ func buildRawBearerToken(t *testing.T, env *testEnv) string {
 func TestRevoke_ValidRefreshToken(t *testing.T) {
 	env := newTestEnv(t)
 	bearerToken := buildRawBearerToken(t, env)
+	bearerTokenHash := util.SHA256Hex(bearerToken)
 
 	linkedAccessTokenID := uuid.New()
 	rawRevokeToken := "raw-rt-to-revoke"
@@ -88,6 +89,7 @@ func TestRevoke_ValidRefreshToken(t *testing.T) {
 
 	env.mockQ.On("GetRefreshTokenByHash", mock.Anything, rtHash).Return(rt, nil)
 	env.mockQ.On("RevokeRefreshToken", mock.Anything, mock.AnythingOfType("repository.RevokeRefreshTokenParams")).Return(nil)
+	env.mockQ.On("GetAccessToken", mock.Anything, bearerTokenHash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 	env.mockQ.On("GetAccessTokenByID", mock.Anything, linkedAccessTokenID).Return(linkedAT, nil)
 	env.mockQ.On("RevokeAccessToken", mock.Anything, linkedAccessTokenID).Return(nil)
 
@@ -102,6 +104,7 @@ func TestRevoke_ValidRefreshToken(t *testing.T) {
 func TestRevoke_ValidAccessToken(t *testing.T) {
 	env := newTestEnv(t)
 	bearerToken := buildRawBearerToken(t, env)
+	bearerTokenHash := util.SHA256Hex(bearerToken)
 
 	rawTokenToRevoke := "raw-at-to-revoke"
 	atHash := util.SHA256Hex(rawTokenToRevoke)
@@ -117,6 +120,8 @@ func TestRevoke_ValidAccessToken(t *testing.T) {
 	}
 
 	// token_type_hint=access_token skips the refresh token lookup path.
+	// IsTokenRevoked (bearer auth) calls GetAccessToken with the bearer token hash.
+	env.mockQ.On("GetAccessToken", mock.Anything, bearerTokenHash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 	env.mockQ.On("GetAccessToken", mock.Anything, atHash).Return(at, nil)
 	env.mockQ.On("RevokeAccessToken", mock.Anything, at.ID).Return(nil)
 
@@ -131,10 +136,13 @@ func TestRevoke_ValidAccessToken(t *testing.T) {
 func TestRevoke_UnknownToken(t *testing.T) {
 	env := newTestEnv(t)
 	bearerToken := buildRawBearerToken(t, env)
+	bearerTokenHash := util.SHA256Hex(bearerToken)
 
 	rawUnknown := "completely-unknown-token-value"
 	unknownHash := util.SHA256Hex(rawUnknown)
 
+	// IsTokenRevoked (bearer auth) calls GetAccessToken with the bearer token hash.
+	env.mockQ.On("GetAccessToken", mock.Anything, bearerTokenHash).Return(repository.AccessToken{}, pgx.ErrNoRows)
 	// Neither refresh token nor access token lookup finds this hash.
 	env.mockQ.On("GetRefreshTokenByHash", mock.Anything, unknownHash).Return(repository.RefreshToken{}, pgx.ErrNoRows)
 	env.mockQ.On("GetAccessToken", mock.Anything, unknownHash).Return(repository.AccessToken{}, pgx.ErrNoRows)

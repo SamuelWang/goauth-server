@@ -153,7 +153,6 @@ func TestInitiateAuthorization_Success(t *testing.T) {
 		"https://auth.example.com/web/auth/callback",
 		"https://app.example.com/callback",
 		"random-state",
-		nil,
 	)
 	require.NoError(t, err)
 	assert.Contains(t, authURL, "state=random-state")
@@ -169,7 +168,7 @@ func TestInitiateAuthorization_ClientNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), clientID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrClientNotFound)
 	q.AssertExpectations(t)
 }
@@ -187,7 +186,7 @@ func TestInitiateAuthorization_ClientInactive(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), inactive.ID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrClientInactive)
 }
 
@@ -199,7 +198,7 @@ func TestInitiateAuthorization_InvalidRedirectURI(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com", "https://NOTREGISTERED.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://NOTREGISTERED.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrInvalidRedirectURI)
 }
 
@@ -222,7 +221,7 @@ func TestInitiateAuthorization_ProviderDisabled(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com", "https://app.example.com/callback", "state")
 	assert.ErrorIs(t, err, ErrProviderDisabled)
 }
 
@@ -816,7 +815,7 @@ func TestInitiateAuthorization_GetClientRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), clientID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting client")
 }
@@ -836,7 +835,7 @@ func TestInitiateAuthorization_GetProviderRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting provider")
 }
@@ -855,10 +854,9 @@ func TestInitiateAuthorization_WithScope(t *testing.T) {
 	q.On("GetClient", mock.Anything, client.ID).Return(client, nil)
 	psvc.On("GetProviderWithSecretByClientAndName", mock.Anything, client.ID, "google").Return(p, nil)
 
-	scope := "openid email"
 	svc := newTestService(t, q, psvc)
 	url, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", &scope)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.NoError(t, err)
 	assert.NotEmpty(t, url)
 }
@@ -1577,7 +1575,7 @@ func TestInitiateAuthorization_ProviderNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.InitiateAuthorization(context.Background(), client.ID, "google",
-		"https://cb.example.com/callback", "https://app.example.com/callback", "state", nil)
+		"https://cb.example.com/callback", "https://app.example.com/callback", "state")
 	require.ErrorIs(t, err, provider.ErrProviderNotFound)
 }
 
