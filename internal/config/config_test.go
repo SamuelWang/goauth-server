@@ -50,7 +50,7 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "goauth-server", cfg.App.Name)
-	assert.Equal(t, "0.0.1", cfg.App.Version)
+	assert.Equal(t, "0.3.0", cfg.App.Version)
 	assert.Equal(t, "development", cfg.Server.Env)
 	assert.Equal(t, "http", cfg.Server.Scheme)
 	assert.Equal(t, "localhost", cfg.Server.HostName)

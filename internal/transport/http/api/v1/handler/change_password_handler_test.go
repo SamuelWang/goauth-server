@@ -64,6 +64,8 @@ func TestChangePassword_Success(t *testing.T) {
 	}).Return(updatedUser, nil)
 	// Refresh token revocation on password change.
 	env.mockQ.On("RevokeRefreshTokensByUser", mock.Anything, mock.AnythingOfType("repository.RevokeRefreshTokensByUserParams")).Return(nil)
+	// StoreDirectLoginToken persists the new access token after password change.
+	env.mockQ.On("CreateAccessToken", mock.Anything, mock.AnythingOfType("repository.CreateAccessTokenParams")).Return(repository.AccessToken{ID: uuid.New()}, nil)
 
 	w := env.doRequest(http.MethodPost, "/api/v1/auth/change-password", map[string]interface{}{
 		"challenge_token": challengeToken,

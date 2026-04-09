@@ -50,6 +50,8 @@ func TestLogin_Success(t *testing.T) {
 	env.mockQ.On("GetUserByEmailForAuth", mock.Anything, "alice@example.com").Return(user, nil)
 	env.mockQ.On("ResetLoginAttempts", mock.Anything, user.ID).Return(user, nil)
 	env.mockQ.On("UpdateLastLogin", mock.Anything, mock.Anything).Return(user, nil)
+	// StoreDirectLoginToken persists the access token after successful login.
+	env.mockQ.On("CreateAccessToken", mock.Anything, mock.AnythingOfType("repository.CreateAccessTokenParams")).Return(repository.AccessToken{ID: uuid.New()}, nil)
 
 	w := env.doRequest(http.MethodPost, "/api/v1/auth/login", map[string]interface{}{
 		"email":    "alice@example.com",

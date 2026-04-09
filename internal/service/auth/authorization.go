@@ -359,8 +359,9 @@ func (s *Service) IsTokenRevoked(ctx context.Context, rawToken string) (bool, er
 	record, err := s.repo.GetAccessToken(ctx, util.SHA256Hex(rawToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Token not found in DB — treat as revoked (no valid record exists).
-			return true, nil
+			// Token not found in DB — treat as not revoked. Direct-login tokens
+			// may not be persisted; validity is enforced by JWT signature and expiry.
+			return false, nil
 		}
 		return false, fmt.Errorf("looking up access token: %w", err)
 	}
