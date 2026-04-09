@@ -38,6 +38,7 @@ func validAdminCfg() config.BootstrapConfig {
 func validClientCfg() config.BootstrapConfig {
 	return config.BootstrapConfig{
 		AllowDefaultClient:        true,
+		DefaultAdminEmail:         "admin@example.com",
 		DefaultClientID:           "default-client",
 		DefaultClientSecret:       "supersecretvalue",
 		DefaultClientName:         "GoAuth Client",
@@ -290,17 +291,20 @@ func TestBootstrapDefaultClient_HTTPRedirectInProduction(t *testing.T) {
 // T5.5 case 9: Valid inputs, no existing clients → creates client and writes audit.
 func TestBootstrapDefaultClient_Success(t *testing.T) {
 	cfg := validClientCfg()
+	adminUser := sampleUser()
 	c := sampleRepoClient()
 	secretHash := util.SHA256Hex(cfg.DefaultClientSecret)
 	isActive := true
 
 	q := &mocks.MockQuerier{}
 	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
+	q.On("GetUserByEmail", mock.Anything, cfg.DefaultAdminEmail).Return(adminUser, nil)
 	q.On("CreateClient", mock.Anything, mock.MatchedBy(func(p repository.CreateClientParams) bool {
 		return p.Name == cfg.DefaultClientName &&
 			p.ClientSecretHash == secretHash &&
 			p.IsActive != nil && *p.IsActive == isActive &&
-			p.IsConfidential == cfg.DefaultClientConfidential
+			p.IsConfidential == cfg.DefaultClientConfidential &&
+			p.CreatedBy == adminUser.ID
 	})).Return(c, nil)
 	q.On("CreateAuditLogEntry", mock.Anything, mock.Anything).Return(uuid.New(), nil)
 
@@ -326,10 +330,12 @@ func TestBootstrapDefaultClient_MissingCredentials(t *testing.T) {
 // Plain secret must never appear in the stored client record.
 func TestBootstrapDefaultClient_SecretIsHashed(t *testing.T) {
 	cfg := validClientCfg()
+	adminUser := sampleUser()
 	c := sampleRepoClient()
 
 	q := &mocks.MockQuerier{}
 	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
+	q.On("GetUserByEmail", mock.Anything, cfg.DefaultAdminEmail).Return(adminUser, nil)
 	q.On("CreateClient", mock.Anything, mock.MatchedBy(func(p repository.CreateClientParams) bool {
 		// Stored hash must NOT equal the plain-text secret.
 		return p.ClientSecretHash != cfg.DefaultClientSecret
@@ -341,4 +347,35 @@ func TestBootstrapDefaultClient_SecretIsHashed(t *testing.T) {
 	err := BootstrapDefaultClient(context.Background(), cfg, devServerCfg(), q, auditSvc)
 	require.NoError(t, err)
 	q.AssertExpectations(t)
+}
+
+// No DefaultAdminEmail → error before CreateClient.
+func TestBootstrapDefaultClient_AdminEmailMissing(t *testing.T) {
+	cfg := validClientCfg()
+	cfg.DefaultAdminEmail = ""
+
+	q := &mocks.MockQuerier{}
+	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
+	auditSvc, _ := newPermissiveMockAuditService(t)
+
+	err := BootstrapDefaultClient(context.Background(), cfg, devServerCfg(), q, auditSvc)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DEFAULT_ADMIN_EMAIL")
+	q.AssertNotCalled(t, "CreateClient")
+}
+
+// GetUserByEmail returns an error → propagated.
+func TestBootstrapDefaultClient_AdminUserNotFound(t *testing.T) {
+	cfg := validClientCfg()
+	dbErr := errors.New("user not found")
+
+	q := &mocks.MockQuerier{}
+	q.On("CountClients", mock.Anything, true).Return(int64(0), nil)
+	q.On("GetUserByEmail", mock.Anything, cfg.DefaultAdminEmail).Return(repository.User{}, dbErr)
+	auditSvc, _ := newPermissiveMockAuditService(t)
+
+	err := BootstrapDefaultClient(context.Background(), cfg, devServerCfg(), q, auditSvc)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, dbErr)
+	q.AssertNotCalled(t, "CreateClient")
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/SamuelWang/goauth-server/internal/service/audit"
 	"github.com/SamuelWang/goauth-server/internal/util"
 	"github.com/SamuelWang/goauth-server/internal/util/password"
-	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -225,11 +224,19 @@ func BootstrapDefaultClient(
 		return nil
 	}
 
+	// Resolve the bootstrap admin's user ID to satisfy the FK on created_by.
+	// The admin must already exist (BootstrapDefaultAdmin runs first in server.go).
+	if cfg.DefaultAdminEmail == "" {
+		return fmt.Errorf("bootstrap: DEFAULT_ADMIN_EMAIL must be configured when bootstrapping a default client")
+	}
+	adminUser, err := repo.GetUserByEmail(ctx, cfg.DefaultAdminEmail)
+	if err != nil {
+		return fmt.Errorf("bootstrap: looking up default admin user: %w", err)
+	}
+
 	// Hash client secret with SHA-256 (never store plain secret).
 	secretHash := util.SHA256Hex(cfg.DefaultClientSecret)
 
-	// Use uuid.Nil as the "created_by" for bootstrap-created clients to clearly
-	// distinguish them from admin-created clients in the audit trail.
 	isActive := true
 	newClient, err := repo.CreateClient(ctx, repository.CreateClientParams{
 		Name:               cfg.DefaultClientName,
@@ -237,7 +244,7 @@ func BootstrapDefaultClient(
 		RedirectUris:       redirectURIs,
 		GrantTypes:         []string{"authorization_code"},
 		IsActive:           &isActive,
-		CreatedBy:          uuid.Nil,
+		CreatedBy:          adminUser.ID,
 		IsConfidential:     cfg.DefaultClientConfidential,
 		AllowRefreshTokens: false,
 	})
