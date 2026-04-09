@@ -55,7 +55,6 @@ func (h *WebHandler) Login(c *gin.Context) {
 		callbackURL,
 		redirectURI,
 		state,
-		scopePtr,
 	)
 	if err != nil {
 		h.handleLoginError(c, err)

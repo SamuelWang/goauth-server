@@ -60,7 +60,6 @@ func (s *Service) InitiateAuthorization(
 	callbackURL string,
 	clientRedirectURI string,
 	state string,
-	scope *string,
 ) (string, error) {
 	// 1. Validate client.
 	client, err := s.repo.GetClient(ctx, clientID)
@@ -94,9 +93,6 @@ func (s *Service) InitiateAuthorization(
 	// 4. Build the OAuth2 config and generate the authorization URL.
 	oauthCfg := buildOAuthConfig(p, callbackURL)
 	opts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
-	if scope != nil && *scope != "" {
-		opts = append(opts, oauth2.SetAuthURLParam("scope", *scope))
-	}
 	authURL := oauthCfg.AuthCodeURL(state, opts...)
 	return authURL, nil
 }
