@@ -68,6 +68,7 @@ func (h *WebHandler) Login(c *gin.Context) {
 		ClientID:    clientID.String(),
 		Provider:    providerName,
 		RedirectURI: redirectURI,
+		Scope:       scopePtr,
 	}
 	cookieVal, err := encodeSession(session, h.signingKey)
 	if err != nil {
@@ -160,6 +161,7 @@ func (h *WebHandler) Callback(c *gin.Context) {
 		code,
 		callbackURL,
 		session.RedirectURI,
+		session.Scope,
 	)
 	if err != nil {
 		h.handleCallbackError(c, err)

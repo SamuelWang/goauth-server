@@ -13,10 +13,11 @@ import (
 // It is stored (signed) in a cookie so the callback handler can reconstruct
 // the full request context without a server-side session store.
 type oauthSession struct {
-	State       string `json:"state"`
-	ClientID    string `json:"client_id"`
-	Provider    string `json:"provider"`
-	RedirectURI string `json:"redirect_uri"`
+	State       string  `json:"state"`
+	ClientID    string  `json:"client_id"`
+	Provider    string  `json:"provider"`
+	RedirectURI string  `json:"redirect_uri"`
+	Scope       *string `json:"scope,omitempty"`
 }
 
 const oauthSessionCookieName = "oauth_session"

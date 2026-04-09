@@ -116,6 +116,7 @@ func (s *Service) HandleProviderCallback(
 	code string,
 	callbackURL string,
 	clientRedirectURI string,
+	scope *string,
 ) (string, error) {
 	// 1. Validate client.
 	client, err := s.repo.GetClient(ctx, clientID)
@@ -169,6 +170,7 @@ func (s *Service) HandleProviderCallback(
 		UserID:      user.ID,
 		ProviderID:  p.ID,
 		RedirectUri: clientRedirectURI,
+		Scope:       scope,
 		ExpiresAt:   time.Now().Add(5 * time.Minute),
 	})
 	if err != nil {

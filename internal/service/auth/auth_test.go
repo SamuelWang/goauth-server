@@ -656,6 +656,7 @@ func TestHandleProviderCallback_Success(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
@@ -672,7 +673,7 @@ func TestHandleProviderCallback_ClientInactive(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	assert.ErrorIs(t, err, ErrClientInactive)
 }
 
@@ -748,6 +749,7 @@ func TestHandleProviderCallback_ExistingUser(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
@@ -796,6 +798,7 @@ func TestHandleProviderCallback_UserLookupError(t *testing.T) {
 		"provider-code",
 		srv.URL+"/token",
 		"https://app.example.com/callback",
+		nil,
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "looking up user")
@@ -871,7 +874,7 @@ func TestHandleProviderCallback_ClientNotFound(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), clientID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.ErrorIs(t, err, ErrClientNotFound)
 }
 
@@ -884,7 +887,7 @@ func TestHandleProviderCallback_GetClientRepoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), clientID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting client")
 }
@@ -903,7 +906,7 @@ func TestHandleProviderCallback_GetProviderError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "getting provider")
 }
@@ -924,7 +927,7 @@ func TestHandleProviderCallback_ProviderDisabled(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", "https://cb.example.com/token", "https://app.example.com/callback")
+		"code", "https://cb.example.com/token", "https://app.example.com/callback", nil)
 	require.ErrorIs(t, err, ErrProviderDisabled)
 }
 
@@ -950,7 +953,7 @@ func TestHandleProviderCallback_ExchangeCodeError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"bad-code", srv.URL+"/token", "https://app.example.com/callback")
+		"bad-code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exchanging provider code")
 }
@@ -981,7 +984,7 @@ func TestHandleProviderCallback_FetchUserInfoError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetching user info")
 }
@@ -1023,7 +1026,7 @@ func TestHandleProviderCallback_CreateAuthCodeError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "storing authorization code")
 }
@@ -1068,7 +1071,7 @@ func TestHandleProviderCallback_EmptyLocale(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1263,7 +1266,7 @@ func TestHandleProviderCallback_UpdateLastLoginError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "updating last login")
 }
@@ -1298,7 +1301,7 @@ func TestHandleProviderCallback_MissingSubInUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1330,7 +1333,7 @@ func TestHandleProviderCallback_MissingEmailInUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1374,7 +1377,7 @@ func TestHandleProviderCallback_NonBoolEmailVerified(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1415,7 +1418,7 @@ func TestHandleProviderCallback_CreateUserError(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "creating user")
 }
@@ -1462,7 +1465,7 @@ func TestHandleProviderCallback_UseFirstNameLastName(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	authCode, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, authCode)
 }
@@ -1494,7 +1497,7 @@ func TestHandleProviderCallback_InvalidJSONUserInfo(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL+"/token", "https://app.example.com/callback")
+		"code", srv.URL+"/token", "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1521,7 +1524,7 @@ func TestHandleProviderCallback_InvalidUserInfoURL(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", srv.URL, "https://app.example.com/callback")
+		"code", srv.URL, "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
@@ -1553,7 +1556,7 @@ func TestHandleProviderCallback_UserInfoConnRefused(t *testing.T) {
 
 	svc := newTestService(t, q, psvc)
 	_, err := svc.HandleProviderCallback(context.Background(), client.ID, "google",
-		"code", tokenSrv.URL, "https://app.example.com/callback")
+		"code", tokenSrv.URL, "https://app.example.com/callback", nil)
 	require.Error(t, err)
 }
 
